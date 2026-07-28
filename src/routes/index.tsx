@@ -613,7 +613,7 @@ function Index() {
           </>
         )}
 
-        {items.length > 0 && (
+        {view === "scenes" && items.length > 0 && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
             <aside className="space-y-2">
               <UploadTile onFiles={addFiles} inputRef={inputRef} />
