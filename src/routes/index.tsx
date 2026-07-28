@@ -520,8 +520,8 @@ function Index() {
 
   /* ---------- export ---------- */
 
-  const downloadOne = async (dataUrl: string, filename: string) => {
-    const blob = await toExportBlob(dataUrl, resolution, format, quality);
+  const downloadOne = async (dataUrl: string, filename: string, grade?: Grade) => {
+    const blob = await toExportBlob(dataUrl, resolution, format, quality, grade);
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `${safeName(filename)}.${format}`;
@@ -544,14 +544,14 @@ function Index() {
         const sub = folder.folder(base)!;
         sub.file(
           `${base}-scene.${format}`,
-          await toExportBlob(item.result!, resolution, format, quality),
+          await toExportBlob(item.result!, resolution, format, quality, item.grade),
         );
         sub.file(`${base}-original.png`, await dataUrlToBlob(item.original));
         for (let i = 0; i < item.variants.length; i++) {
           const v = item.variants[i];
           sub.file(
             `${base}-angle-${i + 1}-${safeName(v.label)}.${format}`,
-            await toExportBlob(v.dataUrl, resolution, format, quality),
+            await toExportBlob(v.dataUrl, resolution, format, quality, item.grade),
           );
         }
       }
@@ -574,6 +574,226 @@ function Index() {
       toast.success(`Exported ${done.length} scene(s)`);
     } finally {
       setZipping(false);
+    }
+  };
+
+
+  /* ---------- grading ---------- */
+
+  const setGrade = useCallback(
+    (id: string, grade: Grade, presetKey?: string, note?: string) =>
+      patch(id, { grade, gradePreset: presetKey, gradeNote: note }),
+    [patch],
+  );
+
+  const autoGrade = useCallback(
+    async (id: string) => {
+      const item = itemsRef.current.find((i) => i.id === id);
+      const src = item?.result ?? item?.original;
+      if (!item || !src) return;
+      patch(id, { grading: true });
+      try {
+        const out = await runSuggest({
+          data: { imageDataUrl: src, presetKeys: PRESETS.map((p) => p.key) },
+        });
+        const base = presetByKey(out.preset)?.grade ?? NEUTRAL_GRADE;
+        const grade: Grade = { ...base, ...(out.tweaks ?? {}) } as Grade;
+        patch(id, { grading: false, grade, gradePreset: out.preset, gradeNote: out.note });
+      } catch (e) {
+        patch(id, { grading: false });
+        toast.error(e instanceof Error ? e.message : "Colorist failed");
+      }
+    },
+    [patch, runSuggest],
+  );
+
+  const autoGradeAll = async () => {
+    setAutoAllBusy(true);
+    try {
+      for (const it of itemsRef.current.filter((i) => i.result)) await autoGrade(it.id);
+      toast.success("Graded every scene");
+    } finally {
+      setAutoAllBusy(false);
+    }
+  };
+
+  /* ---------- gallery / board / timeline ---------- */
+
+  const gallery: GalleryEntry[] = items.flatMap((it) => {
+    const out: GalleryEntry[] = [
+      {
+        id: `${it.id}-src`,
+        itemId: it.id,
+        itemName: it.name,
+        kind: "source",
+        label: "Original frame",
+        src: it.original,
+        grade: it.grade,
+      },
+    ];
+    if (it.result)
+      out.push({
+        id: `${it.id}-plate`,
+        itemId: it.id,
+        itemName: it.name,
+        kind: "plate",
+        label: "Clean plate",
+        src: it.result,
+        grade: it.grade,
+      });
+    it.variants.forEach((v) =>
+      out.push({
+        id: v.id,
+        itemId: it.id,
+        itemName: it.name,
+        kind: "angle",
+        label: v.label,
+        src: v.dataUrl,
+        grade: it.grade,
+      }),
+    );
+    return out;
+  });
+
+  const addShot = (e: GalleryEntry) => {
+    setShots((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        src: e.src,
+        name: `${e.itemName} — ${e.label}`,
+        caption: "",
+        shotType: e.kind === "angle" ? "Wide" : "Establishing",
+        selected: true,
+        grade: e.grade,
+      },
+    ]);
+    toast.success("Added to storyboard");
+  };
+
+  const addClip = (e: GalleryEntry) => {
+    setClips((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), src: e.src, name: `${e.itemName} — ${e.label}`, duration: 2.5, grade: e.grade },
+    ]);
+    toast.success("Added to timeline");
+  };
+
+  const addAllPlates = () => {
+    const plates = items.filter((i) => i.result);
+    if (plates.length === 0) return;
+    setClips((prev) => [
+      ...prev,
+      ...plates.map((i) => ({
+        id: crypto.randomUUID(),
+        src: i.result!,
+        name: i.name,
+        duration: 2.5,
+        grade: i.grade,
+      })),
+    ]);
+  };
+
+  const move = <T extends { id: string }>(list: T[], id: string, dir: -1 | 1): T[] => {
+    const i = list.findIndex((x) => x.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= list.length) return list;
+    const copy = [...list];
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+    return copy;
+  };
+
+  const exportContactSheet = async (title: string) => {
+    const sel = shots.filter((s) => s.selected);
+    if (sel.length === 0) return;
+    setBoardExporting("sheet");
+    try {
+      const cols = Math.min(3, sel.length);
+      const rows = Math.ceil(sel.length / cols);
+      const cw = 640;
+      const ch = 360;
+      const pad = 28;
+      const cap = 74;
+      const canvas = document.createElement("canvas");
+      canvas.width = cols * cw + pad * (cols + 1);
+      canvas.height = rows * (ch + cap) + pad * (rows + 1) + 96;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#0b0b0e";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#f5f5f5";
+      ctx.font = "600 34px ui-serif, Georgia, serif";
+      ctx.fillText(title, pad, 58);
+      ctx.fillStyle = "#8a8a94";
+      ctx.font = "16px ui-monospace, monospace";
+      ctx.fillText(`${sel.length} shot(s) · ${new Date().toLocaleDateString()}`, pad, 82);
+
+      for (let i = 0; i < sel.length; i++) {
+        const s = sel[i];
+        const img = await loadImg(s.src);
+        const c = i % cols;
+        const r = Math.floor(i / cols);
+        const x = pad + c * (cw + pad);
+        const y = 96 + pad + r * (ch + cap + pad);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, cw, ch);
+        ctx.clip();
+        const scale = Math.max(cw / img.width, ch / img.height);
+        const dw = img.width * scale;
+        const dh = img.height * scale;
+        ctx.translate(x + (cw - dw) / 2, y + (ch - dh) / 2);
+        drawGraded(ctx, img, dw, dh, s.grade);
+        ctx.restore();
+        ctx.strokeStyle = "#26262c";
+        ctx.strokeRect(x, y, cw, ch);
+        ctx.fillStyle = "#e6e6ea";
+        ctx.font = "600 18px ui-sans-serif, system-ui";
+        ctx.fillText(`${String(i + 1).padStart(2, "0")} · ${s.shotType}`, x, y + ch + 26);
+        ctx.fillStyle = "#9a9aa4";
+        ctx.font = "15px ui-sans-serif, system-ui";
+        ctx.fillText((s.caption || s.name).slice(0, 68), x, y + ch + 50);
+      }
+      const blob = await new Promise<Blob>((res) => canvas.toBlob((b) => res(b!), "image/png"));
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${safeName(title)}-contact-sheet.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success(`Exported ${sel.length} selected shot(s)`);
+    } finally {
+      setBoardExporting(null);
+    }
+  };
+
+  const exportBoardZip = async (title: string) => {
+    const sel = shots.filter((s) => s.selected);
+    if (sel.length === 0) return;
+    setBoardExporting("zip");
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder(safeName(title))!;
+      for (let i = 0; i < sel.length; i++) {
+        const s = sel[i];
+        folder.file(
+          `${String(i + 1).padStart(2, "0")}-${safeName(s.shotType)}-${safeName(s.name)}.${format}`,
+          await toExportBlob(s.src, resolution, format, quality, s.grade),
+        );
+      }
+      folder.file(
+        "shotlist.txt",
+        sel
+          .map((s, i) => `${String(i + 1).padStart(2, "0")} [${s.shotType}] ${s.name}\n    ${s.caption}`)
+          .join("\n"),
+      );
+      const blob = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${safeName(title)}.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success(`Exported ${sel.length} selected shot(s)`);
+    } finally {
+      setBoardExporting(null);
     }
   };
 
@@ -613,19 +833,84 @@ function Index() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 pb-24">
-        <div className="mb-6 flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-950 p-0.5 text-xs w-fit">
-          {(["scenes", "flows"] as const).map((v) => (
+        <div className="mb-6 flex flex-wrap items-center gap-1 rounded-2xl border border-neutral-800 bg-neutral-950 p-1 text-xs w-fit">
+          {RAIL.map((r) => (
             <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`rounded-full px-4 py-1.5 capitalize transition ${
-                view === v ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
+              key={r.key}
+              onClick={() => setView(r.key)}
+              className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 transition ${
+                view === r.key
+                  ? "bg-emerald-400/10 text-emerald-300"
+                  : "text-neutral-500 hover:text-neutral-200"
               }`}
             >
-              {v}
+              <r.icon className="h-3.5 w-3.5" />
+              {r.label}
             </button>
           ))}
         </div>
+
+        {view === "gallery" && (
+          <GalleryPanel
+            entries={gallery}
+            onDownload={(e) => downloadOne(e.src, `${e.itemName}-${e.label}`, e.grade)}
+            onSendToBoard={addShot}
+            onSendToTimeline={addClip}
+            onOpenScene={(id) => {
+              setActiveId(id);
+              setView("scenes");
+            }}
+          />
+        )}
+
+        {view === "color" && (
+          <ColorPanel
+            scenes={items
+              .filter((i) => i.result || i.original)
+              .map((i) => ({
+                id: i.id,
+                name: i.name,
+                src: i.result ?? i.original,
+                grade: i.grade,
+                gradeNote: i.gradeNote,
+                gradePreset: i.gradePreset,
+                grading: i.grading,
+              }))}
+            activeId={activeId}
+            onSelect={setActiveId}
+            onGrade={setGrade}
+            onAutoGrade={autoGrade}
+            onAutoGradeAll={autoGradeAll}
+            autoAllBusy={autoAllBusy}
+          />
+        )}
+
+        {view === "board" && (
+          <StoryboardPanel
+            shots={shots}
+            onPatch={(id, p) => setShots((prev) => prev.map((s) => (s.id === id ? { ...s, ...p } : s)))}
+            onRemove={(id) => setShots((prev) => prev.filter((s) => s.id !== id))}
+            onMove={(id, dir) => setShots((prev) => move(prev, id, dir))}
+            onToggle={(id) =>
+              setShots((prev) => prev.map((s) => (s.id === id ? { ...s, selected: !s.selected } : s)))
+            }
+            onToggleAll={(sel) => setShots((prev) => prev.map((s) => ({ ...s, selected: sel })))}
+            onExport={exportContactSheet}
+            onExportZip={exportBoardZip}
+            exporting={boardExporting}
+          />
+        )}
+
+        {view === "timeline" && (
+          <TimelinePanel
+            clips={clips}
+            onPatch={(id, p) => setClips((prev) => prev.map((c) => (c.id === id ? { ...c, ...p } : c)))}
+            onRemove={(id) => setClips((prev) => prev.filter((c) => c.id !== id))}
+            onMove={(id, dir) => setClips((prev) => move(prev, id, dir))}
+            onAddAll={addAllPlates}
+            canAddAll={items.some((i) => i.result)}
+          />
+        )}
 
         {view === "flows" && <FlowsPanel seedImage={active?.result ?? active?.original ?? null} />}
 
@@ -749,7 +1034,7 @@ function Index() {
                       </button>
                       {active.status === "done" && active.result && (
                         <button
-                          onClick={() => downloadOne(active.result!, `${active.name}-scene`)}
+                          onClick={() => downloadOne(active.result!, `${active.name}-scene`, active.grade)}
                           className="inline-flex items-center gap-2 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-200 hover:border-neutral-600"
                         >
                           <Download className="h-3.5 w-3.5" />
@@ -835,7 +1120,7 @@ function Index() {
                                   </span>
                                   <div className="flex shrink-0 items-center gap-1">
                                     <button
-                                      onClick={() => downloadOne(v.dataUrl, `${active.name}-angle-${i + 1}`)}
+                                      onClick={() => downloadOne(v.dataUrl, `${active.name}-angle-${i + 1}`, active.grade)}
                                       className="rounded p-1 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
                                       aria-label="Download angle"
                                     >
