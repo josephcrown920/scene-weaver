@@ -166,6 +166,8 @@ function Index() {
   const [batchBusy, setBatchBusy] = useState<string | null>(null);
   const [customAngle, setCustomAngle] = useState("");
   const [showMap, setShowMap] = useState(true);
+  const [view, setView] = useState<"scenes" | "flows">("scenes");
+
   const inputRef = useRef<HTMLInputElement>(null);
   const itemsRef = useRef<Item[]>([]);
   itemsRef.current = items;
