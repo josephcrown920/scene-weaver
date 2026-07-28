@@ -577,8 +577,25 @@ function Index() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 pb-24">
-        {items.length === 0 && (
+        <div className="mb-6 flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-950 p-0.5 text-xs w-fit">
+          {(["scenes", "flows"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`rounded-full px-4 py-1.5 capitalize transition ${
+                view === v ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+
+        {view === "flows" && <FlowsPanel seedImage={active?.result ?? active?.original ?? null} />}
+
+        {view === "scenes" && items.length === 0 && (
           <>
+
             <section className="mb-10 max-w-3xl">
               <h1 className="font-serif text-5xl leading-[1.02] tracking-tight text-neutral-50 md:text-7xl">
                 Keep the scene.
