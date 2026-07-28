@@ -3,15 +3,20 @@ import { z } from "zod";
 
 const Input = z.object({
   imageDataUrl: z.string().min(20),
+  instruction: z.string().optional(),
 });
 
-const PROMPT = `Remove every person from this image completely. Reconstruct the background where they were standing so the scene looks natural and empty, as if no one was ever there. Preserve the exact lighting, color grading, camera angle, lens depth-of-field, film grain, and every other environmental detail (cars, walls, floor, signs, tiles, sky, props). Do not add new subjects. Do not change the framing or aspect ratio. Return only the cleaned scene as an image.`;
+const DEFAULT_PROMPT = `Remove every person from this image completely. Reconstruct the background where they were standing so the scene looks natural and empty, as if no one was ever there. Preserve the exact lighting, color grading, camera angle, lens depth-of-field, film grain, and every other environmental detail (cars, walls, floor, signs, tiles, sky, props). Do not add new subjects. Do not change the framing or aspect ratio. Return only the cleaned scene as an image.`;
 
 export const extractScene = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => Input.parse(raw))
   .handler(async ({ data }) => {
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("Missing LOVABLE_API_KEY");
+
+    const prompt = data.instruction
+      ? `${DEFAULT_PROMPT}\n\nAdditional instruction from user: ${data.instruction}`
+      : DEFAULT_PROMPT;
 
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -20,13 +25,13 @@ export const extractScene = createServerFn({ method: "POST" })
         "Lovable-API-Key": key,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image-preview",
+        model: "google/gemini-2.5-flash-image",
         modalities: ["image", "text"],
         messages: [
           {
             role: "user",
             content: [
-              { type: "text", text: PROMPT },
+              { type: "text", text: prompt },
               { type: "image_url", image_url: { url: data.imageDataUrl } },
             ],
           },
@@ -46,7 +51,6 @@ export const extractScene = createServerFn({ method: "POST" })
       choices?: Array<{
         message?: {
           images?: Array<{ image_url?: { url?: string } }>;
-          content?: string;
         };
       }>;
     };
