@@ -29,6 +29,8 @@ import { AssistantPanel, type ChatMsg } from "@/components/scene/AssistantPanel"
 import { Minimap3D } from "@/components/scene/Minimap3D";
 import { MultiAngleNodeBoard, type AngleNode } from "@/components/scene/MultiAngleNode";
 import { RebuildPanel } from "@/components/scene/RebuildPanel";
+import { FlowsPanel } from "@/components/scene/FlowsPanel";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
