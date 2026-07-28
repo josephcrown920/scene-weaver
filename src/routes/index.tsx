@@ -29,6 +29,8 @@ import { AssistantPanel, type ChatMsg } from "@/components/scene/AssistantPanel"
 import { Minimap3D } from "@/components/scene/Minimap3D";
 import { MultiAngleNodeBoard, type AngleNode } from "@/components/scene/MultiAngleNode";
 import { RebuildPanel } from "@/components/scene/RebuildPanel";
+import { FlowsPanel } from "@/components/scene/FlowsPanel";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -164,6 +166,8 @@ function Index() {
   const [batchBusy, setBatchBusy] = useState<string | null>(null);
   const [customAngle, setCustomAngle] = useState("");
   const [showMap, setShowMap] = useState(true);
+  const [view, setView] = useState<"scenes" | "flows">("scenes");
+
   const inputRef = useRef<HTMLInputElement>(null);
   const itemsRef = useRef<Item[]>([]);
   itemsRef.current = items;
@@ -577,8 +581,25 @@ function Index() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 pb-24">
-        {items.length === 0 && (
+        <div className="mb-6 flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-950 p-0.5 text-xs w-fit">
+          {(["scenes", "flows"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`rounded-full px-4 py-1.5 capitalize transition ${
+                view === v ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:text-neutral-300"
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+
+        {view === "flows" && <FlowsPanel seedImage={active?.result ?? active?.original ?? null} />}
+
+        {view === "scenes" && items.length === 0 && (
           <>
+
             <section className="mb-10 max-w-3xl">
               <h1 className="font-serif text-5xl leading-[1.02] tracking-tight text-neutral-50 md:text-7xl">
                 Keep the scene.
@@ -596,7 +617,7 @@ function Index() {
           </>
         )}
 
-        {items.length > 0 && (
+        {view === "scenes" && items.length > 0 && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
             <aside className="space-y-2">
               <UploadTile onFiles={addFiles} inputRef={inputRef} />
