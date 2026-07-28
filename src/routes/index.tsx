@@ -30,6 +30,14 @@ import { Minimap3D } from "@/components/scene/Minimap3D";
 import { MultiAngleNodeBoard, type AngleNode } from "@/components/scene/MultiAngleNode";
 import { RebuildPanel } from "@/components/scene/RebuildPanel";
 import { FlowsPanel } from "@/components/scene/FlowsPanel";
+import { GalleryPanel } from "@/components/scene/GalleryPanel";
+import { ColorPanel } from "@/components/scene/ColorPanel";
+import { StoryboardPanel } from "@/components/scene/StoryboardPanel";
+import { TimelinePanel } from "@/components/scene/TimelinePanel";
+import { suggestGrade } from "@/lib/suggest-grade.functions";
+import { NEUTRAL_GRADE, PRESETS, presetByKey, drawGraded, type Grade } from "@/lib/grade";
+import type { Clip, GalleryEntry, Shot } from "@/lib/studio-types";
+import { Images, Palette, LayoutGrid, Film, Wand2 } from "lucide-react";
 
 
 export const Route = createFileRoute("/")({
@@ -73,7 +81,22 @@ interface Item {
   variants: Variant[];
   angleBusy: boolean;
   nodes: AngleNode[];
+  grade: Grade;
+  gradePreset?: string;
+  gradeNote?: string;
+  grading?: boolean;
 }
+
+type StudioView = "scenes" | "gallery" | "color" | "board" | "timeline" | "flows";
+
+const RAIL: { key: StudioView; label: string; icon: typeof Images }[] = [
+  { key: "scenes", label: "Create", icon: Sparkles },
+  { key: "gallery", label: "Gallery", icon: Images },
+  { key: "color", label: "Color", icon: Palette },
+  { key: "board", label: "Board", icon: LayoutGrid },
+  { key: "timeline", label: "Timeline", icon: Film },
+  { key: "flows", label: "Flows", icon: Wand2 },
+];
 
 type Resolution = "original" | "2160" | "1440" | "1080" | "720";
 type Format = "png" | "jpg";
@@ -124,6 +147,7 @@ async function toExportBlob(
   resolution: Resolution,
   format: Format,
   quality: number,
+  grade?: Grade,
 ): Promise<Blob> {
   const img = await loadImg(dataUrl);
   const maxH = resolution === "original" ? img.height : Number(resolution);
@@ -140,7 +164,8 @@ async function toExportBlob(
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, w, h);
   }
-  ctx.drawImage(img, 0, 0, w, h);
+  if (grade) drawGraded(ctx, img, w, h, grade);
+  else ctx.drawImage(img, 0, 0, w, h);
   const mime = format === "jpg" ? "image/jpeg" : "image/png";
   return await new Promise<Blob>((res) =>
     canvas.toBlob((b) => res(b!), mime, format === "jpg" ? quality : undefined),
@@ -166,7 +191,12 @@ function Index() {
   const [batchBusy, setBatchBusy] = useState<string | null>(null);
   const [customAngle, setCustomAngle] = useState("");
   const [showMap, setShowMap] = useState(true);
-  const [view, setView] = useState<"scenes" | "flows">("scenes");
+  const [view, setView] = useState<StudioView>("scenes");
+  const [shots, setShots] = useState<Shot[]>([]);
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [boardExporting, setBoardExporting] = useState<string | null>(null);
+  const [autoAllBusy, setAutoAllBusy] = useState(false);
+  const runSuggest = useServerFn(suggestGrade);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const itemsRef = useRef<Item[]>([]);
@@ -236,6 +266,8 @@ function Index() {
           variants: [],
           angleBusy: false,
           nodes: makeNodes(),
+          grade: { ...NEUTRAL_GRADE },
+          gradePreset: "neutral",
         })),
       );
 
