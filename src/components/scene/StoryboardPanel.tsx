@@ -20,8 +20,8 @@ export function StoryboardPanel({
   onMove: (id: string, dir: -1 | 1) => void;
   onToggle: (id: string) => void;
   onToggleAll: (selected: boolean) => void;
-  onExport: () => void;
-  onExportZip: () => void;
+  onExport: (title: string) => void;
+  onExportZip: (title: string) => void;
   exporting: string | null;
 }) {
   const [title, setTitle] = useState("Scene Changer — Storyboard");
@@ -55,7 +55,7 @@ export function StoryboardPanel({
             {selected.length === shots.length ? "Deselect all" : "Select all"}
           </button>
           <button
-            onClick={onExportZip}
+            onClick={() => onExportZip(title)}
             disabled={selected.length === 0 || !!exporting}
             className="inline-flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-[11px] text-neutral-200 hover:border-neutral-500 disabled:opacity-40"
           >
@@ -67,7 +67,7 @@ export function StoryboardPanel({
             Export selected (ZIP)
           </button>
           <button
-            onClick={onExport}
+            onClick={() => onExport(title)}
             disabled={selected.length === 0 || !!exporting}
             className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400 px-3 py-1.5 text-[11px] font-medium text-neutral-950 hover:bg-emerald-300 disabled:bg-neutral-800 disabled:text-neutral-500"
           >
@@ -153,12 +153,6 @@ export function StoryboardPanel({
           </div>
         ))}
       </div>
-      <StoryboardTitleSink title={title} />
     </div>
   );
-}
-
-/** Keeps the typed title available to the exporter via a data attribute. */
-function StoryboardTitleSink({ title }: { title: string }) {
-  return <div data-storyboard-title={title} className="hidden" />;
 }
