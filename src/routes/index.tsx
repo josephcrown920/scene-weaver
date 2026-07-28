@@ -14,14 +14,21 @@ import {
   Rotate3d,
   Camera,
   Pencil,
+  Layers,
+  Gauge,
 } from "lucide-react";
 import JSZip from "jszip";
 import { extractScene } from "@/lib/extract-scene.functions";
 import { generateAngle } from "@/lib/generate-angle.functions";
+import { upscaleScene } from "@/lib/upscale-scene.functions";
+import { sceneChat } from "@/lib/scene-chat.functions";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { BeforeAfter } from "@/components/scene/BeforeAfter";
-import { AssistantPanel } from "@/components/scene/AssistantPanel";
+import { AssistantPanel, type ChatMsg } from "@/components/scene/AssistantPanel";
+import { Minimap3D } from "@/components/scene/Minimap3D";
+import { MultiAngleNodeBoard, type AngleNode } from "@/components/scene/MultiAngleNode";
+import { RebuildPanel } from "@/components/scene/RebuildPanel";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -30,12 +37,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Batch AI tool: strip people from photos, generate alternate camera angles of the clean scene, and export the whole set as a ZIP.",
+          "Batch AI tool: strip people from photos, rebuild and upscale the clean plate, generate alternate camera angles, and export the whole set as a ZIP.",
       },
       { property: "og:title", content: "Scene Changer" },
       {
         property: "og:description",
-        content: "Batch upload, before/after slider, alternate angles, prompt refinement, ZIP export.",
+        content:
+          "Batch upload, before/after slider, multi-angle nodes, upscaling, a scene chatbot, and ZIP export.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -45,33 +53,47 @@ export const Route = createFileRoute("/")({
 });
 
 type Status = "queued" | "processing" | "done" | "error";
-type Turn = { instruction: string; ok: boolean };
 type Variant = { id: string; label: string; dataUrl: string };
 
 interface Item {
   id: string;
-  name: string;      // display / filename base (editable)
+  name: string;
   original: string;
   result: string | null;
+  prevResult: string | null;
   status: Status;
   error?: string;
-  history: Turn[];
+  chat: ChatMsg[];
+  chatBusy: boolean;
   refining: boolean;
+  upscaling: boolean;
+  rebuilding: boolean;
   variants: Variant[];
   angleBusy: boolean;
+  nodes: AngleNode[];
 }
 
-type Resolution = "original" | "1080" | "720";
+type Resolution = "original" | "2160" | "1440" | "1080" | "720";
 type Format = "png" | "jpg";
 
-const ANGLE_PRESETS = [
-  "Rotate camera 30° to the left, same subject distance",
-  "Rotate camera 30° to the right, same subject distance",
-  "Reverse angle — 180° behind the original camera position",
-  "High-angle overhead view of the same scene",
-  "Wide establishing shot pulled back 3x",
-  "Tight close-up on the central prop",
+const ANGLE_PRESETS: { label: string; prompt: string }[] = [
+  { label: "Left 30°", prompt: "Rotate camera 30° to the left, same subject distance" },
+  { label: "Right 30°", prompt: "Rotate camera 30° to the right, same subject distance" },
+  { label: "Reverse 180°", prompt: "Reverse angle — 180° behind the original camera position" },
+  { label: "Overhead", prompt: "High-angle overhead view of the same scene" },
+  { label: "Wide 3x", prompt: "Wide establishing shot pulled back 3x" },
+  { label: "Close-up", prompt: "Tight close-up on the central prop" },
 ];
+
+function makeNodes(): AngleNode[] {
+  return ANGLE_PRESETS.map((p) => ({
+    id: crypto.randomUUID(),
+    label: p.label,
+    prompt: p.prompt,
+    enabled: false,
+    state: "idle" as const,
+  }));
+}
 
 function fileToDataUrl(f: File): Promise<string> {
   return new Promise((res, rej) => {
@@ -99,10 +121,10 @@ async function toExportBlob(
   dataUrl: string,
   resolution: Resolution,
   format: Format,
+  quality: number,
 ): Promise<Blob> {
   const img = await loadImg(dataUrl);
-  const maxH =
-    resolution === "1080" ? 1080 : resolution === "720" ? 720 : img.height;
+  const maxH = resolution === "original" ? img.height : Number(resolution);
   const scale = img.height > maxH ? maxH / img.height : 1;
   const w = Math.round(img.width * scale);
   const h = Math.round(img.height * scale);
@@ -110,14 +132,17 @@ async function toExportBlob(
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   if (format === "jpg") {
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, w, h);
   }
   ctx.drawImage(img, 0, 0, w, h);
   const mime = format === "jpg" ? "image/jpeg" : "image/png";
-  const q = format === "jpg" ? 0.92 : undefined;
-  return await new Promise<Blob>((res) => canvas.toBlob((b) => res(b!), mime, q));
+  return await new Promise<Blob>((res) =>
+    canvas.toBlob((b) => res(b!), mime, format === "jpg" ? quality : undefined),
+  );
 }
 
 function safeName(s: string): string {
@@ -127,27 +152,53 @@ function safeName(s: string): string {
 function Index() {
   const run = useServerFn(extractScene);
   const runAngle = useServerFn(generateAngle);
+  const runUpscale = useServerFn(upscaleScene);
+  const runChat = useServerFn(sceneChat);
+
   const [items, setItems] = useState<Item[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [resolution, setResolution] = useState<Resolution>("original");
   const [format, setFormat] = useState<Format>("png");
+  const [quality, setQuality] = useState(0.92);
   const [zipping, setZipping] = useState(false);
+  const [batchBusy, setBatchBusy] = useState<string | null>(null);
   const [customAngle, setCustomAngle] = useState("");
+  const [showMap, setShowMap] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
+  const itemsRef = useRef<Item[]>([]);
+  itemsRef.current = items;
 
   const patch = useCallback((id: string, p: Partial<Item>) => {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...p } : it)));
   }, []);
 
   const processItem = useCallback(
-    async (item: Item) => {
+    async (item: Item, guidance?: string) => {
       patch(item.id, { status: "processing" });
       try {
-        const out = await run({ data: { imageDataUrl: item.original } });
-        patch(item.id, { status: "done", result: out.imageDataUrl });
+        const out = await run({
+          data: {
+            imageDataUrl: item.original,
+            ...(guidance ? { instruction: guidance } : {}),
+          },
+        });
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === item.id
+              ? {
+                  ...it,
+                  status: "done",
+                  prevResult: it.result,
+                  result: out.imageDataUrl,
+                  rebuilding: false,
+                }
+              : it,
+          ),
+        );
       } catch (e) {
         patch(item.id, {
           status: "error",
+          rebuilding: false,
           error: e instanceof Error ? e.message : "Failed",
         });
       }
@@ -171,11 +222,16 @@ function Index() {
           name: f.name.replace(/\.[^.]+$/, ""),
           original: await fileToDataUrl(f),
           result: null,
+          prevResult: null,
           status: "queued" as const,
-          history: [],
+          chat: [],
+          chatBusy: false,
           refining: false,
+          upscaling: false,
+          rebuilding: false,
           variants: [],
           angleBusy: false,
+          nodes: makeNodes(),
         })),
       );
 
@@ -194,59 +250,42 @@ function Index() {
     if (activeId === id) setActiveId(null);
   };
 
-  const rename = (id: string, name: string) => {
-    patch(id, { name });
-  };
+  const rename = (id: string, name: string) => patch(id, { name });
 
   const refine = useCallback(
     async (id: string, instruction: string) => {
-      const item = items.find((i) => i.id === id);
-      if (!item || !item.result) return;
+      const item = itemsRef.current.find((i) => i.id === id);
+      if (!item?.result) return false;
       patch(id, { refining: true });
       try {
-        const out = await run({
-          data: { imageDataUrl: item.result, instruction },
-        });
+        const out = await run({ data: { imageDataUrl: item.result, instruction } });
         setItems((prev) =>
           prev.map((it) =>
             it.id === id
-              ? {
-                  ...it,
-                  result: out.imageDataUrl,
-                  refining: false,
-                  history: [...it.history, { instruction, ok: true }],
-                }
+              ? { ...it, refining: false, prevResult: it.result, result: out.imageDataUrl }
               : it,
           ),
         );
+        return true;
       } catch (e) {
-        setItems((prev) =>
-          prev.map((it) =>
-            it.id === id
-              ? {
-                  ...it,
-                  refining: false,
-                  history: [...it.history, { instruction, ok: false }],
-                }
-              : it,
-          ),
-        );
+        patch(id, { refining: false });
         toast.error(e instanceof Error ? e.message : "Refine failed");
+        return false;
       }
     },
-    [items, patch, run],
+    [patch, run],
   );
 
   const genAngle = useCallback(
-    async (id: string, angle: string) => {
-      const item = items.find((i) => i.id === id);
-      if (!item || !item.result) return;
+    async (id: string, angle: string, label?: string) => {
+      const item = itemsRef.current.find((i) => i.id === id);
+      if (!item?.result) return false;
       patch(id, { angleBusy: true });
       try {
         const out = await runAngle({ data: { imageDataUrl: item.result, angle } });
         const v: Variant = {
           id: crypto.randomUUID(),
-          label: angle.length > 40 ? angle.slice(0, 40) + "…" : angle,
+          label: label ?? (angle.length > 40 ? angle.slice(0, 40) + "…" : angle),
           dataUrl: out.imageDataUrl,
         };
         setItems((prev) =>
@@ -254,24 +293,199 @@ function Index() {
             it.id === id ? { ...it, angleBusy: false, variants: [...it.variants, v] } : it,
           ),
         );
+        return true;
       } catch (e) {
         patch(id, { angleBusy: false });
         toast.error(e instanceof Error ? e.message : "Angle generation failed");
+        return false;
       }
     },
-    [items, patch, runAngle],
+    [patch, runAngle],
+  );
+
+  const upscale = useCallback(
+    async (id: string, factor: "2x" | "4x") => {
+      const item = itemsRef.current.find((i) => i.id === id);
+      if (!item?.result) return false;
+      patch(id, { upscaling: true });
+      try {
+        const out = await runUpscale({ data: { imageDataUrl: item.result, factor } });
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === id
+              ? { ...it, upscaling: false, prevResult: it.result, result: out.imageDataUrl }
+              : it,
+          ),
+        );
+        toast.success(`Upscaled ${factor}`);
+        return true;
+      } catch (e) {
+        patch(id, { upscaling: false });
+        toast.error(e instanceof Error ? e.message : "Upscale failed");
+        return false;
+      }
+    },
+    [patch, runUpscale],
+  );
+
+  const undo = (id: string) => {
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === id && it.prevResult
+          ? { ...it, result: it.prevResult, prevResult: null }
+          : it,
+      ),
+    );
+  };
+
+  /* ---------- node board ---------- */
+
+  const toggleNode = (itemId: string, nodeId: string) => {
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === itemId
+          ? {
+              ...it,
+              nodes: it.nodes.map((n) =>
+                n.id === nodeId ? { ...n, enabled: !n.enabled } : n,
+              ),
+            }
+          : it,
+      ),
+    );
+  };
+
+  const setNodeState = (itemId: string, nodeId: string, state: AngleNode["state"]) => {
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === itemId
+          ? { ...it, nodes: it.nodes.map((n) => (n.id === nodeId ? { ...n, state } : n)) }
+          : it,
+      ),
+    );
+  };
+
+  const runNodes = useCallback(
+    async (itemId: string, only?: string) => {
+      const item = itemsRef.current.find((i) => i.id === itemId);
+      if (!item?.result) return;
+      const targets = only
+        ? item.nodes.filter((n) => n.id === only)
+        : item.nodes.filter((n) => n.enabled);
+      if (targets.length === 0) return;
+      for (const n of targets) {
+        setNodeState(itemId, n.id, "running");
+        const ok = await genAngle(itemId, n.prompt, n.label);
+        setNodeState(itemId, n.id, ok ? "done" : "error");
+      }
+    },
+    [genAngle],
+  );
+
+  /* ---------- batch flows ---------- */
+
+  const batchProcessAll = async () => {
+    setBatchBusy("extract");
+    try {
+      for (const it of itemsRef.current.filter(
+        (i) => i.status === "queued" || i.status === "error",
+      )) {
+        await processItem(it);
+      }
+    } finally {
+      setBatchBusy(null);
+    }
+  };
+
+  const batchAngles = async () => {
+    setBatchBusy("angles");
+    try {
+      for (const it of itemsRef.current.filter((i) => i.status === "done")) {
+        await runNodes(it.id);
+      }
+      toast.success("Batch angles complete");
+    } finally {
+      setBatchBusy(null);
+    }
+  };
+
+  const batchUpscale = async () => {
+    setBatchBusy("upscale");
+    try {
+      for (const it of itemsRef.current.filter((i) => i.status === "done")) {
+        await upscale(it.id, "2x");
+      }
+      toast.success("Batch upscale complete");
+    } finally {
+      setBatchBusy(null);
+    }
+  };
+
+  /* ---------- chatbot ---------- */
+
+  const sendChat = useCallback(
+    async (id: string, text: string) => {
+      const item = itemsRef.current.find((i) => i.id === id);
+      if (!item) return;
+      const history: ChatMsg[] = [...item.chat, { role: "user", content: text }];
+      patch(id, { chat: history, chatBusy: true });
+      try {
+        const out = await runChat({
+          data: {
+            messages: history.map((m) => ({ role: m.role, content: m.content })),
+            sceneName: item.name,
+            hasResult: !!item.result,
+            variantCount: item.variants.length,
+          },
+        });
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === id
+              ? {
+                  ...it,
+                  chatBusy: false,
+                  chat: [
+                    ...history,
+                    { role: "assistant", content: out.reply, action: out.action },
+                  ],
+                }
+              : it,
+          ),
+        );
+
+        if (out.action === "refine" && out.instruction) await refine(id, out.instruction);
+        else if (out.action === "angle" && out.instruction)
+          await genAngle(id, out.instruction);
+        else if (out.action === "upscale") await upscale(id, "2x");
+        else if (out.action === "rebuild") {
+          const target = itemsRef.current.find((i) => i.id === id);
+          if (target) {
+            patch(id, { rebuilding: true });
+            await processItem(target, out.instruction || undefined);
+          }
+        }
+      } catch (e) {
+        patch(id, { chatBusy: false });
+        toast.error(e instanceof Error ? e.message : "Assistant failed");
+      }
+    },
+    [patch, runChat, refine, genAngle, upscale, processItem],
   );
 
   const removeVariant = (itemId: string, variantId: string) => {
     setItems((prev) =>
       prev.map((it) =>
-        it.id === itemId ? { ...it, variants: it.variants.filter((v) => v.id !== variantId) } : it,
+        it.id === itemId
+          ? { ...it, variants: it.variants.filter((v) => v.id !== variantId) }
+          : it,
       ),
     );
   };
 
+  /* ---------- export ---------- */
+
   const downloadOne = async (dataUrl: string, filename: string) => {
-    const blob = await toExportBlob(dataUrl, resolution, format);
+    const blob = await toExportBlob(dataUrl, resolution, format, quality);
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `${safeName(filename)}.${format}`;
@@ -292,21 +506,29 @@ function Index() {
       for (const item of done) {
         const base = safeName(item.name);
         const sub = folder.folder(base)!;
-        const blob = await toExportBlob(item.result!, resolution, format);
-        sub.file(`${base}-scene.${format}`, blob);
-        const orig = await dataUrlToBlob(item.original);
-        sub.file(`${base}-original.png`, orig);
+        sub.file(
+          `${base}-scene.${format}`,
+          await toExportBlob(item.result!, resolution, format, quality),
+        );
+        sub.file(`${base}-original.png`, await dataUrlToBlob(item.original));
         for (let i = 0; i < item.variants.length; i++) {
           const v = item.variants[i];
-          const vb = await toExportBlob(v.dataUrl, resolution, format);
-          sub.file(`${base}-angle-${i + 1}.${format}`, vb);
+          sub.file(
+            `${base}-angle-${i + 1}-${safeName(v.label)}.${format}`,
+            await toExportBlob(v.dataUrl, resolution, format, quality),
+          );
         }
       }
-      const readme =
+      folder.file(
+        "README.txt",
         "Scene Changer\n\n" +
-        `${done.length} scene(s) at ${resolution === "original" ? "original resolution" : `${resolution}p max height`}, format: ${format.toUpperCase()}.\n` +
-        `Generated ${new Date().toISOString()}\n`;
-      folder.file("README.txt", readme);
+          `${done.length} scene(s) at ${
+            resolution === "original" ? "original resolution" : `${resolution}p max height`
+          }, format: ${format.toUpperCase()}${
+            format === "jpg" ? ` @ quality ${Math.round(quality * 100)}%` : ""
+          }.\n` +
+          `Generated ${new Date().toISOString()}\n`,
+      );
       const blob = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -342,16 +564,13 @@ function Index() {
         <div className="flex flex-wrap items-center gap-3">
           <FormatPicker value={format} onChange={setFormat} />
           <ResolutionPicker value={resolution} onChange={setResolution} />
+          <QualitySlider value={quality} onChange={setQuality} disabled={format === "png"} />
           <button
             onClick={downloadZip}
             disabled={doneCount === 0 || zipping}
             className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-sm font-medium text-neutral-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
           >
-            {zipping ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Package className="h-4 w-4" />
-            )}
+            {zipping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
             scene changer.zip ({doneCount})
           </button>
         </div>
@@ -367,9 +586,9 @@ function Index() {
                 <span className="italic text-neutral-400">Change the angle.</span>
               </h1>
               <p className="mt-6 max-w-xl text-sm leading-relaxed text-neutral-400 md:text-base">
-                Drop in a batch of frames. Walk the subject out, then generate
-                alternate camera angles of the same environment. Refine with
-                prompts. Export as PNG or JPG in one ZIP.
+                Drop in a batch of frames. Walk the subject out, rebuild and
+                upscale the plate, then fire off multi-angle nodes. Chat with the
+                assistant, watch it in 3D, export as one ZIP.
               </p>
             </section>
             <UploadZone onFiles={addFiles} inputRef={inputRef} />
@@ -380,24 +599,31 @@ function Index() {
         {items.length > 0 && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
             <aside className="space-y-2">
-              <UploadTile onFiles={addFiles} inputRef={inputRef} compact />
+              <UploadTile onFiles={addFiles} inputRef={inputRef} />
+              <BatchBar
+                busy={batchBusy}
+                doneCount={doneCount}
+                pending={items.filter((i) => i.status === "queued" || i.status === "error").length}
+                onProcess={batchProcessAll}
+                onAngles={batchAngles}
+                onUpscale={batchUpscale}
+              />
               {items.map((it) => (
-                <button
+                <div
                   key={it.id}
                   onClick={() => setActiveId(it.id)}
-                  className={`group flex w-full items-center gap-3 rounded-lg border p-2 text-left transition ${
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === "Enter" && setActiveId(it.id)}
+                  className={`group flex w-full cursor-pointer items-center gap-3 rounded-lg border p-2 text-left transition ${
                     activeId === it.id
                       ? "border-emerald-400/60 bg-emerald-400/5"
                       : "border-neutral-800 bg-neutral-950/40 hover:border-neutral-700"
                   }`}
                 >
                   <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded bg-neutral-900">
-                    <img
-                      src={it.result ?? it.original}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                    {it.status === "processing" && (
+                    <img src={it.result ?? it.original} alt="" className="h-full w-full object-cover" />
+                    {(it.status === "processing" || it.upscaling || it.angleBusy) && (
                       <div className="absolute inset-0 flex items-center justify-center bg-black/60">
                         <Loader2 className="h-4 w-4 animate-spin text-emerald-300" />
                       </div>
@@ -416,12 +642,8 @@ function Index() {
                           )}
                         </span>
                       )}
-                      {it.status === "processing" && (
-                        <span className="text-neutral-400">Processing</span>
-                      )}
-                      {it.status === "queued" && (
-                        <span className="text-neutral-500">Queued</span>
-                      )}
+                      {it.status === "processing" && <span className="text-neutral-400">Processing</span>}
+                      {it.status === "queued" && <span className="text-neutral-500">Queued</span>}
                       {it.status === "error" && (
                         <span className="text-red-400">
                           <X className="inline h-3 w-3" /> Error
@@ -439,7 +661,7 @@ function Index() {
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
-                </button>
+                </div>
               ))}
             </aside>
 
@@ -453,13 +675,10 @@ function Index() {
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <FilenameEditor
-                        value={active.name}
-                        onChange={(v) => rename(active.id, v)}
-                      />
+                      <FilenameEditor value={active.name} onChange={(v) => rename(active.id, v)} />
                       <div className="mt-1 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
                         {active.status === "done"
-                          ? `Clean plate · ${active.history.length} refinement(s) · ${active.variants.length} angle(s)`
+                          ? `Clean plate · ${active.variants.length} angle(s)`
                           : active.status === "processing"
                             ? "Rebuilding scene…"
                             : active.status === "error"
@@ -467,31 +686,36 @@ function Index() {
                               : "Queued"}
                       </div>
                     </div>
-                    {active.status === "done" && active.result && (
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => downloadOne(active.result!, `${active.name}-scene`)}
-                        className="inline-flex items-center gap-2 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-200 hover:border-neutral-600"
+                        onClick={() => setShowMap((v) => !v)}
+                        className="inline-flex items-center gap-2 rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:border-neutral-600"
                       >
-                        <Download className="h-3.5 w-3.5" />
-                        Download .{format}
+                        <Layers className="h-3.5 w-3.5" />
+                        {showMap ? "Hide" : "Show"} 3D map
                       </button>
-                    )}
+                      {active.status === "done" && active.result && (
+                        <button
+                          onClick={() => downloadOne(active.result!, `${active.name}-scene`)}
+                          className="inline-flex items-center gap-2 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-200 hover:border-neutral-600"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Download .{format}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {active.status === "processing" && (
                     <div className="flex h-[50vh] flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-950/60 text-neutral-400">
                       <Loader2 className="h-6 w-6 animate-spin" />
-                      <p className="font-mono text-xs uppercase tracking-[0.2em]">
-                        Rebuilding scene…
-                      </p>
+                      <p className="font-mono text-xs uppercase tracking-[0.2em]">Rebuilding scene…</p>
                     </div>
                   )}
 
                   {active.status === "error" && (
                     <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-6 text-sm text-red-300">
-                      <div className="font-mono text-[10px] uppercase tracking-widest text-red-400">
-                        Failed
-                      </div>
+                      <div className="font-mono text-[10px] uppercase tracking-widest text-red-400">Failed</div>
                       <div className="mt-1">{active.error}</div>
                       <button
                         onClick={() => processItem(active)}
@@ -504,14 +728,34 @@ function Index() {
 
                   {active.status === "done" && active.result && (
                     <>
-                      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+                      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
                         <BeforeAfter beforeSrc={active.original} afterSrc={active.result} />
                         <AssistantPanel
-                          history={active.history}
-                          busy={active.refining}
-                          onSend={(instr) => refine(active.id, instr)}
+                          messages={active.chat}
+                          busy={active.chatBusy || active.refining || active.upscaling}
+                          onSend={(t) => sendChat(active.id, t)}
                         />
                       </div>
+
+                      <RebuildPanel
+                        busy={active.rebuilding || active.refining}
+                        upscaling={active.upscaling}
+                        canUndo={!!active.prevResult}
+                        onRebuild={(g) => {
+                          patch(active.id, { rebuilding: true });
+                          processItem(active, g || undefined);
+                        }}
+                        onUndo={() => undo(active.id)}
+                        onUpscale={(f) => upscale(active.id, f)}
+                      />
+
+                      <MultiAngleNodeBoard
+                        nodes={active.nodes}
+                        running={active.angleBusy}
+                        onToggle={(nid) => toggleNode(active.id, nid)}
+                        onRunAll={() => runNodes(active.id)}
+                        onRunOne={(nid) => runNodes(active.id, nid)}
+                      />
 
                       <AnglePanel
                         busy={active.angleBusy}
@@ -538,9 +782,7 @@ function Index() {
                                   </span>
                                   <div className="flex shrink-0 items-center gap-1">
                                     <button
-                                      onClick={() =>
-                                        downloadOne(v.dataUrl, `${active.name}-angle-${i + 1}`)
-                                      }
+                                      onClick={() => downloadOne(v.dataUrl, `${active.name}-angle-${i + 1}`)}
                                       className="rounded p-1 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
                                       aria-label="Download angle"
                                     >
@@ -574,17 +816,53 @@ function Index() {
           </div>
         )}
       </main>
+
+      {showMap && active && (
+        <Minimap3D src={active.result ?? active.original} label={`${active.name} 3D preview`} />
+      )}
     </div>
   );
 }
 
-function FilenameEditor({
-  value,
-  onChange,
+function BatchBar({
+  busy,
+  doneCount,
+  pending,
+  onProcess,
+  onAngles,
+  onUpscale,
 }: {
-  value: string;
-  onChange: (v: string) => void;
+  busy: string | null;
+  doneCount: number;
+  pending: number;
+  onProcess: () => void;
+  onAngles: () => void;
+  onUpscale: () => void;
 }) {
+  const btn =
+    "flex w-full items-center justify-between rounded-md border border-neutral-800 bg-neutral-900/60 px-2.5 py-1.5 text-[11px] text-neutral-300 hover:border-neutral-600 hover:text-neutral-100 disabled:opacity-40";
+  return (
+    <div className="space-y-1.5 rounded-lg border border-neutral-800 bg-neutral-950/40 p-2">
+      <div className="px-1 font-mono text-[9px] uppercase tracking-[0.2em] text-neutral-500">
+        Batch flow
+      </div>
+      <button onClick={onProcess} disabled={!!busy || pending === 0} className={btn}>
+        <span>Extract pending</span>
+        {busy === "extract" ? <Loader2 className="h-3 w-3 animate-spin" /> : <span>{pending}</span>}
+      </button>
+      <button onClick={onAngles} disabled={!!busy || doneCount === 0} className={btn}>
+        <span>Run angle nodes on all</span>
+        {busy === "angles" ? <Loader2 className="h-3 w-3 animate-spin" /> : <span>{doneCount}</span>}
+      </button>
+      <button onClick={onUpscale} disabled={!!busy || doneCount === 0} className={btn}>
+        <span>Upscale all 2x</span>
+        {busy === "upscale" ? <Loader2 className="h-3 w-3 animate-spin" /> : <span>{doneCount}</span>}
+      </button>
+    </div>
+  );
+}
+
+function FilenameEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex items-center gap-2">
       <Pencil className="h-3.5 w-3.5 text-neutral-500" />
@@ -629,6 +907,8 @@ function ResolutionPicker({
 }) {
   const opts: { v: Resolution; label: string }[] = [
     { v: "original", label: "Original" },
+    { v: "2160", label: "4K" },
+    { v: "1440", label: "1440p" },
     { v: "1080", label: "1080p" },
     { v: "720", label: "720p" },
   ];
@@ -649,6 +929,38 @@ function ResolutionPicker({
   );
 }
 
+function QualitySlider({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-full border border-neutral-800 bg-neutral-950 px-3 py-1 text-xs ${
+        disabled ? "opacity-40" : ""
+      }`}
+      title={disabled ? "PNG is lossless — quality applies to JPG" : "JPG export quality"}
+    >
+      <Gauge className="h-3.5 w-3.5 text-neutral-500" />
+      <input
+        type="range"
+        min={40}
+        max={100}
+        value={Math.round(value * 100)}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value) / 100)}
+        className="w-24 accent-emerald-400"
+        aria-label="Export quality"
+      />
+      <span className="w-8 font-mono text-[10px] text-neutral-400">{Math.round(value * 100)}%</span>
+    </div>
+  );
+}
+
 function AnglePanel({
   busy,
   customAngle,
@@ -663,26 +975,14 @@ function AnglePanel({
   return (
     <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 p-4">
       <div className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-400">
-        <Camera className="h-3 w-3" /> Generate a new angle
+        <Camera className="h-3 w-3" /> Custom angle
         {busy && <Loader2 className="ml-1 h-3 w-3 animate-spin text-emerald-300" />}
       </div>
-      <div className="flex flex-wrap gap-2">
-        {ANGLE_PRESETS.map((a) => (
-          <button
-            key={a}
-            disabled={busy}
-            onClick={() => onGenerate(a)}
-            className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1 text-xs text-neutral-300 transition hover:border-neutral-600 hover:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {a.split(",")[0]}
-          </button>
-        ))}
-      </div>
-      <div className="mt-3 flex gap-2">
+      <div className="flex gap-2">
         <input
           value={customAngle}
           onChange={(e) => setCustomAngle(e.target.value)}
-          placeholder="Custom angle prompt — e.g. worm's-eye view from the front bumper"
+          placeholder="e.g. worm's-eye view from the front bumper"
           className="flex-1 rounded-full border border-neutral-800 bg-neutral-950 px-4 py-2 text-xs text-neutral-200 outline-none placeholder:text-neutral-600 focus:border-neutral-600"
         />
         <button
@@ -698,10 +998,6 @@ function AnglePanel({
           Generate
         </button>
       </div>
-      <p className="mt-2 text-[10px] leading-relaxed text-neutral-500">
-        Experimental — synthesized from the single clean plate. Results vary; try
-        several angles and pick the ones that hold up.
-      </p>
     </div>
   );
 }
@@ -727,9 +1023,7 @@ function UploadZone({
         onFiles(Array.from(e.dataTransfer.files));
       }}
       className={`group flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed px-6 py-20 text-center transition ${
-        hover
-          ? "border-emerald-400 bg-emerald-400/5"
-          : "border-neutral-700 bg-neutral-900/40 hover:border-neutral-500"
+        hover ? "border-emerald-400 bg-emerald-400/5" : "border-neutral-700 bg-neutral-900/40 hover:border-neutral-500"
       }`}
     >
       <input
@@ -757,11 +1051,9 @@ function UploadZone({
 function UploadTile({
   onFiles,
   inputRef,
-  compact,
 }: {
   onFiles: (files: File[]) => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
-  compact?: boolean;
 }) {
   return (
     <label
@@ -770,9 +1062,7 @@ function UploadTile({
         e.preventDefault();
         onFiles(Array.from(e.dataTransfer.files));
       }}
-      className={`flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-neutral-700 bg-neutral-950/40 p-3 text-neutral-400 transition hover:border-neutral-500 hover:text-neutral-200 ${
-        compact ? "" : "py-6"
-      }`}
+      className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-neutral-700 bg-neutral-950/40 p-3 text-neutral-400 transition hover:border-neutral-500 hover:text-neutral-200"
     >
       <input
         ref={inputRef}
@@ -789,7 +1079,7 @@ function UploadTile({
 }
 
 function ComingSoonRow() {
-  const items = [
+  const cards = [
     {
       icon: Video,
       title: "Video scenes",
@@ -803,11 +1093,8 @@ function ComingSoonRow() {
   ];
   return (
     <section className="mt-12 grid gap-4 md:grid-cols-2">
-      {items.map(({ icon: Icon, title, body }) => (
-        <div
-          key={title}
-          className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-5"
-        >
+      {cards.map(({ icon: Icon, title, body }) => (
+        <div key={title} className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-5">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
             <Icon className="h-3 w-3" /> Coming next
           </div>
