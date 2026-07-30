@@ -183,8 +183,12 @@ function Index() {
   const runAngle = useServerFn(generateAngle);
   const runUpscale = useServerFn(upscaleScene);
   const runChat = useServerFn(sceneChat);
+  const runAddCharacter = useServerFn(addCharacter);
+  const runSwapCharacter = useServerFn(swapCharacter);
 
   const [items, setItems] = useState<Item[]>([]);
+  const [cast, setCast] = useState<CastMember[]>([]);
+  const [castBusy, setCastBusy] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [resolution, setResolution] = useState<Resolution>("original");
   const [format, setFormat] = useState<Format>("png");
