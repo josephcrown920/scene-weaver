@@ -1220,8 +1220,16 @@ function Index() {
 
                       {active.variants.length > 0 && (
                         <div>
-                          <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-500">
-                            Generated angles
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-500">
+                              Generated angles — set the order
+                            </div>
+                            <button
+                              onClick={() => anglesToTimeline(active.id)}
+                              className="inline-flex items-center gap-1.5 rounded-full bg-violet-500 px-3 py-1 text-[11px] font-medium text-neutral-50 transition hover:bg-violet-400"
+                            >
+                              <Film className="h-3.5 w-3.5" /> Arrange into video
+                            </button>
                           </div>
                           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                             {active.variants.map((v, i) => (
