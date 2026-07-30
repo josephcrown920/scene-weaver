@@ -8,6 +8,8 @@ const FILTERS: { key: AssetKind | "all"; label: string }[] = [
   { key: "source", label: "Sources" },
   { key: "plate", label: "Clean plates" },
   { key: "angle", label: "Angles" },
+  { key: "cast", label: "Cast" },
+  { key: "swap", label: "Swaps" },
 ];
 
 export function GalleryPanel({

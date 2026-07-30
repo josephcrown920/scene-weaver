@@ -1,6 +1,13 @@
 import type { Grade } from "@/lib/grade";
 
-export type AssetKind = "source" | "plate" | "angle";
+export type AssetKind = "source" | "plate" | "angle" | "cast" | "swap";
+
+export interface CastMember {
+  id: string;
+  name: string;
+  description: string;
+  reference?: string | null;
+}
 
 export interface GalleryEntry {
   id: string;
