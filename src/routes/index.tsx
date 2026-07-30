@@ -16,6 +16,8 @@ import {
   Pencil,
   Layers,
   Gauge,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import JSZip from "jszip";
 import { extractScene } from "@/lib/extract-scene.functions";
@@ -318,6 +320,48 @@ function Index() {
     },
     [patch, run],
   );
+
+  const reorderVariant = (itemId: string, variantId: string, dir: -1 | 1) => {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.id !== itemId) return it;
+        const i = it.variants.findIndex((v) => v.id === variantId);
+        const j = i + dir;
+        if (i < 0 || j < 0 || j >= it.variants.length) return it;
+        const variants = [...it.variants];
+        [variants[i], variants[j]] = [variants[j], variants[i]];
+        return { ...it, variants };
+      }),
+    );
+  };
+
+  const anglesToTimeline = (itemId: string) => {
+    const item = itemsRef.current.find((i) => i.id === itemId);
+    if (!item || item.variants.length === 0) return;
+    const seq = [
+      ...(item.result
+        ? [
+            {
+              id: crypto.randomUUID(),
+              src: item.result,
+              name: `${item.name} — plate`,
+              duration: 2.5,
+              grade: item.grade,
+            },
+          ]
+        : []),
+      ...item.variants.map((v) => ({
+        id: crypto.randomUUID(),
+        src: v.dataUrl,
+        name: `${item.name} — ${v.label}`,
+        duration: 2.5,
+        grade: item.grade,
+      })),
+    ];
+    setClips((prev) => [...prev, ...seq]);
+    setView("timeline");
+    toast.success(`${seq.length} clips arranged on the timeline`);
+  };
 
   /* ---------- cast ---------- */
 
@@ -1220,8 +1264,16 @@ function Index() {
 
                       {active.variants.length > 0 && (
                         <div>
-                          <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-500">
-                            Generated angles
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-500">
+                              Generated angles — set the order
+                            </div>
+                            <button
+                              onClick={() => anglesToTimeline(active.id)}
+                              className="inline-flex items-center gap-1.5 rounded-full bg-violet-500 px-3 py-1 text-[11px] font-medium text-neutral-50 transition hover:bg-violet-400"
+                            >
+                              <Film className="h-3.5 w-3.5" /> Arrange into video
+                            </button>
                           </div>
                           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                             {active.variants.map((v, i) => (
@@ -1235,6 +1287,22 @@ function Index() {
                                     #{i + 1} · {v.label}
                                   </span>
                                   <div className="flex shrink-0 items-center gap-1">
+                                    <button
+                                      onClick={() => reorderVariant(active.id, v.id, -1)}
+                                      disabled={i === 0}
+                                      className="rounded p-1 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-30"
+                                      aria-label="Move angle earlier"
+                                    >
+                                      <ArrowLeft className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => reorderVariant(active.id, v.id, 1)}
+                                      disabled={i === active.variants.length - 1}
+                                      className="rounded p-1 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-30"
+                                      aria-label="Move angle later"
+                                    >
+                                      <ArrowRight className="h-3.5 w-3.5" />
+                                    </button>
                                     <button
                                       onClick={() => downloadOne(v.dataUrl, `${active.name}-angle-${i + 1}`, active.grade)}
                                       className="rounded p-1 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200"
