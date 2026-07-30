@@ -39,7 +39,7 @@ import { addCharacter, swapCharacter } from "@/lib/cast.functions";
 import { suggestGrade } from "@/lib/suggest-grade.functions";
 import { NEUTRAL_GRADE, PRESETS, presetByKey, drawGraded, type Grade } from "@/lib/grade";
 import type { AssetKind, CastMember, Clip, GalleryEntry, Shot } from "@/lib/studio-types";
-import { Images, Palette, LayoutGrid, Film, Wand2 } from "lucide-react";
+import { Images, Palette, LayoutGrid, Film, Wand2, Users } from "lucide-react";
 
 
 export const Route = createFileRoute("/")({
@@ -89,7 +89,7 @@ interface Item {
   grading?: boolean;
 }
 
-type StudioView = "scenes" | "gallery" | "color" | "board" | "timeline" | "flows";
+type StudioView = "scenes" | "gallery" | "color" | "board" | "timeline" | "cast" | "flows";
 
 const RAIL: { key: StudioView; label: string; icon: typeof Images }[] = [
   { key: "scenes", label: "Create", icon: Sparkles },
@@ -97,6 +97,7 @@ const RAIL: { key: StudioView; label: string; icon: typeof Images }[] = [
   { key: "color", label: "Color", icon: Palette },
   { key: "board", label: "Board", icon: LayoutGrid },
   { key: "timeline", label: "Timeline", icon: Film },
+  { key: "cast", label: "Cast", icon: Users },
   { key: "flows", label: "Flows", icon: Wand2 },
 ];
 
@@ -990,6 +991,34 @@ function Index() {
           />
         )}
 
+        {view === "cast" && (
+          <div className="space-y-4">
+            {active ? (
+              <>
+                <div className="overflow-hidden rounded-2xl border border-neutral-800">
+                  <img
+                    src={active.result ?? active.original}
+                    alt={active.name}
+                    className="max-h-[320px] w-full object-cover"
+                  />
+                </div>
+                <CastPanel
+                  cast={cast}
+                  busy={castBusy}
+                  onAdd={(m) => setCast((p) => [...p, { ...m, id: crypto.randomUUID() }])}
+                  onRemove={(cid) => setCast((p) => p.filter((c) => c.id !== cid))}
+                  onInsert={(m, placement) => castInsert(active.id, m, placement)}
+                  onSwap={(m, target) => castSwap(active.id, m, target)}
+                />
+              </>
+            ) : (
+              <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+                Upload or select a scene first
+              </p>
+            )}
+          </div>
+        )}
+
         {view === "flows" && <FlowsPanel seedImage={active?.result ?? active?.original ?? null} />}
 
         {view === "scenes" && items.length === 0 && (
@@ -1171,6 +1200,15 @@ function Index() {
                         onToggle={(nid) => toggleNode(active.id, nid)}
                         onRunAll={() => runNodes(active.id)}
                         onRunOne={(nid) => runNodes(active.id, nid)}
+                      />
+
+                      <CastPanel
+                        cast={cast}
+                        busy={castBusy}
+                        onAdd={(m) => setCast((p) => [...p, { ...m, id: crypto.randomUUID() }])}
+                        onRemove={(cid) => setCast((p) => p.filter((c) => c.id !== cid))}
+                        onInsert={(m, placement) => castInsert(active.id, m, placement)}
+                        onSwap={(m, target) => castSwap(active.id, m, target)}
                       />
 
                       <AnglePanel
