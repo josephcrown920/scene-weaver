@@ -34,9 +34,11 @@ import { GalleryPanel } from "@/components/scene/GalleryPanel";
 import { ColorPanel } from "@/components/scene/ColorPanel";
 import { StoryboardPanel } from "@/components/scene/StoryboardPanel";
 import { TimelinePanel } from "@/components/scene/TimelinePanel";
+import { CastPanel } from "@/components/scene/CastPanel";
+import { addCharacter, swapCharacter } from "@/lib/cast.functions";
 import { suggestGrade } from "@/lib/suggest-grade.functions";
 import { NEUTRAL_GRADE, PRESETS, presetByKey, drawGraded, type Grade } from "@/lib/grade";
-import type { Clip, GalleryEntry, Shot } from "@/lib/studio-types";
+import type { AssetKind, CastMember, Clip, GalleryEntry, Shot } from "@/lib/studio-types";
 import { Images, Palette, LayoutGrid, Film, Wand2 } from "lucide-react";
 
 
@@ -63,7 +65,7 @@ export const Route = createFileRoute("/")({
 });
 
 type Status = "queued" | "processing" | "done" | "error";
-type Variant = { id: string; label: string; dataUrl: string };
+type Variant = { id: string; label: string; dataUrl: string; kind?: AssetKind };
 
 interface Item {
   id: string;
@@ -310,6 +312,78 @@ function Index() {
       }
     },
     [patch, run],
+  );
+
+  /* ---------- cast ---------- */
+
+  const castInsert = useCallback(
+    async (id: string, m: CastMember, placement: string) => {
+      const item = itemsRef.current.find((i) => i.id === id);
+      const scene = item?.result ?? item?.original;
+      if (!scene) return;
+      setCastBusy("insert");
+      try {
+        const out = await runAddCharacter({
+          data: {
+            sceneDataUrl: scene,
+            name: m.name,
+            description: m.description,
+            placement,
+            referenceDataUrl: m.reference ?? undefined,
+          },
+        });
+        const v: Variant = {
+          id: crypto.randomUUID(),
+          label: `Cast · ${m.name}`,
+          dataUrl: out.imageDataUrl,
+          kind: "cast",
+        };
+        setItems((prev) =>
+          prev.map((it) => (it.id === id ? { ...it, variants: [...it.variants, v] } : it)),
+        );
+        toast.success(`${m.name} added to the scene`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Adding the character failed");
+      } finally {
+        setCastBusy(null);
+      }
+    },
+    [runAddCharacter],
+  );
+
+  const castSwap = useCallback(
+    async (id: string, m: CastMember, target: string) => {
+      const item = itemsRef.current.find((i) => i.id === id);
+      const scene = item?.original ?? item?.result;
+      if (!scene || !target.trim()) return;
+      setCastBusy("swap");
+      try {
+        const out = await runSwapCharacter({
+          data: {
+            sceneDataUrl: scene,
+            target: target.trim(),
+            name: m.name,
+            description: m.description,
+            referenceDataUrl: m.reference ?? undefined,
+          },
+        });
+        const v: Variant = {
+          id: crypto.randomUUID(),
+          label: `Swap · ${m.name}`,
+          dataUrl: out.imageDataUrl,
+          kind: "swap",
+        };
+        setItems((prev) =>
+          prev.map((it) => (it.id === id ? { ...it, variants: [...it.variants, v] } : it)),
+        );
+        toast.success(`Swapped in ${m.name}`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Character swap failed");
+      } finally {
+        setCastBusy(null);
+      }
+    },
+    [runSwapCharacter],
   );
 
   const genAngle = useCallback(
@@ -646,7 +720,7 @@ function Index() {
         id: v.id,
         itemId: it.id,
         itemName: it.name,
-        kind: "angle",
+        kind: v.kind ?? "angle",
         label: v.label,
         src: v.dataUrl,
         grade: it.grade,
