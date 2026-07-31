@@ -33,6 +33,7 @@ import { MultiAngleNodeBoard, type AngleNode } from "@/components/scene/MultiAng
 import { RebuildPanel } from "@/components/scene/RebuildPanel";
 import { FlowsPanel } from "@/components/scene/FlowsPanel";
 import { GalleryPanel } from "@/components/scene/GalleryPanel";
+import { CanvasPanel } from "@/components/scene/CanvasPanel";
 import { ColorPanel } from "@/components/scene/ColorPanel";
 import { StoryboardPanel } from "@/components/scene/StoryboardPanel";
 import { TimelinePanel } from "@/components/scene/TimelinePanel";
@@ -41,7 +42,7 @@ import { addCharacter, swapCharacter } from "@/lib/cast.functions";
 import { suggestGrade } from "@/lib/suggest-grade.functions";
 import { NEUTRAL_GRADE, PRESETS, presetByKey, drawGraded, type Grade } from "@/lib/grade";
 import type { AssetKind, CastMember, Clip, GalleryEntry, Shot } from "@/lib/studio-types";
-import { Images, Palette, LayoutGrid, Film, Wand2, Users } from "lucide-react";
+import { Images, Palette, LayoutGrid, Film, Wand2, Users, Frame } from "lucide-react";
 
 
 export const Route = createFileRoute("/")({
@@ -91,10 +92,11 @@ interface Item {
   grading?: boolean;
 }
 
-type StudioView = "scenes" | "gallery" | "color" | "board" | "timeline" | "cast" | "flows";
+type StudioView = "scenes" | "canvas" | "gallery" | "color" | "board" | "timeline" | "cast" | "flows";
 
 const RAIL: { key: StudioView; label: string; icon: typeof Images }[] = [
   { key: "scenes", label: "Create", icon: Sparkles },
+  { key: "canvas", label: "Canvas", icon: Frame },
   { key: "gallery", label: "Gallery", icon: Images },
   { key: "color", label: "Color", icon: Palette },
   { key: "board", label: "Board", icon: LayoutGrid },
@@ -972,6 +974,19 @@ function Index() {
             </button>
           ))}
         </div>
+
+        {view === "canvas" && (
+          <CanvasPanel
+            entries={gallery}
+            onDownload={(e) => downloadOne(e.src, `${e.itemName}-${e.label}`, e.grade)}
+            onSendToBoard={addShot}
+            onSendToTimeline={addClip}
+            onOpenScene={(id) => {
+              setActiveId(id);
+              setView("scenes");
+            }}
+          />
+        )}
 
         {view === "gallery" && (
           <GalleryPanel
