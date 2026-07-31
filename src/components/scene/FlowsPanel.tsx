@@ -9,8 +9,10 @@ import {
   ImagePlus,
   Play,
   Trash2,
+  Package,
 } from "lucide-react";
 import { toast } from "sonner";
+import JSZip from "jszip";
 import { runFlow } from "@/lib/run-flow.functions";
 
 type Tag = "IMAGE" | "BATCH" | "VIDEO" | "CAMPAIGN";
@@ -173,6 +175,87 @@ const FLOWS: Flow[] = [
       "From the attached 2x2 image grid, extract {text} and re-render it as a full-frame standalone image at the same quality and grade. Return only the image.",
     iterator: ["cell 1,1", "cell 1,2", "cell 2,1", "cell 2,2"],
   },
+  {
+    id: "camera-control",
+    name: "Camera control set",
+    tags: ["IMAGE", "BATCH"],
+    desc: "Re-shoot the same moment with director camera presets — top-down, low-view and straight-on.",
+    slots: [{ key: "scene", label: "Scene" }],
+    prompt:
+      "Re-render the attached scene as a {text}. Keep the same location, subject, wardrobe, time of day, lighting and color grade — only the camera position and lens change. Cinematic, photoreal. Return only the image.",
+    iterator: [
+      "top-down shot looking straight down",
+      "low-view shot from near ground level looking up",
+      "straight-on eye-level shot",
+      "dutch-angle three-quarter shot",
+    ],
+  },
+  {
+    id: "character-posing",
+    name: "Character posing",
+    tags: ["IMAGE", "BATCH"],
+    desc: "Keep one character's identity and wardrobe while re-posing them across a set of blocking beats.",
+    slots: [
+      { key: "character", label: "Character" },
+      { key: "scene", label: "Scene (optional)" },
+    ],
+    prompt:
+      "Re-pose the referenced character: {text}. Preserve facial identity, hair, build and wardrobe exactly. Keep the environment, lighting, lens and grade consistent. Photoreal, full body visible where possible. Return only the image.",
+    iterator: [
+      "standing still, arms at sides, facing camera",
+      "arms raised wide, celebratory",
+      "crouched low, looking off-frame",
+      "walking towards camera mid-stride",
+    ],
+  },
+  {
+    id: "dynamic-storyboard",
+    name: "Dynamic storyboard",
+    tags: ["BATCH", "CAMPAIGN"],
+    desc: "Generate a full sequence of story beats from one scene, ready to drop into the board.",
+    slots: [{ key: "scene", label: "Scene" }],
+    prompt:
+      "Using the attached scene as the world and visual reference, render this story beat: {text}. Same location language, palette, lighting and film grain. Cinematic 16:9 frame. Return only the image.",
+    iterator: [
+      "establishing wide of the location",
+      "medium shot, tension building",
+      "tight close-up on a reacting face",
+      "insert shot of the key prop",
+      "final wide as the moment resolves",
+    ],
+  },
+  {
+    id: "chained-video",
+    name: "Chained video keyframes",
+    tags: ["VIDEO"],
+    desc: "Use the last frame of one beat as the start of the next, creating a seamless continuous shot.",
+    slots: [{ key: "start", label: "Start frame" }],
+    prompt:
+      "This is the NEXT keyframe of one continuous unbroken camera move that begins at the attached frame. Move: {text}. Perfect continuity — identical location, props, wardrobe, time of day, lighting, lens and grade. No cuts, no new subjects. Return only the image.",
+    iterator: [
+      "camera drifts forward 1 metre",
+      "camera keeps pushing in and tilts up slightly",
+      "camera arcs left around the subject",
+      "camera settles into a high wide final frame",
+    ],
+  },
+  {
+    id: "canvas-variations",
+    name: "Canvas variations",
+    tags: ["IMAGE", "BATCH"],
+    desc: "Spin off a wall of alternates from one frame to iterate on in the Canvas workspace.",
+    slots: [{ key: "seed", label: "Seed frame" }],
+    prompt:
+      "Generate an alternate take of the attached frame: {text}. Same subject and location identity, freely reinterpreted within that constraint. Cinematic and photoreal. Return only the image.",
+    iterator: [
+      "golden hour light",
+      "hard night light with practical sources",
+      "overcast diffused light",
+      "backlit with heavy atmosphere and haze",
+      "cool blue moonlight",
+      "warm tungsten interior light",
+    ],
+  },
 ];
 
 type Output = { id: string; label: string; dataUrl: string };
@@ -274,6 +357,38 @@ export function FlowsPanel({ seedImage }: { seedImage?: string | null }) {
     if (ok > 0) toast.success(`${flow.name} — ${ok} output${ok > 1 ? "s" : ""}`);
   };
 
+  const [zipping, setZipping] = useState(false);
+
+  const downloadZip = async () => {
+    if (outputs.length === 0) return;
+    setZipping(true);
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder(flow.id)!;
+      for (let i = 0; i < outputs.length; i++) {
+        const o = outputs[i];
+        const blob = await fetch(o.dataUrl).then((r) => r.blob());
+        const safe = o.label.replace(/[^a-z0-9]+/gi, "-").toLowerCase().slice(0, 40) || "output";
+        folder.file(`${String(i + 1).padStart(2, "0")}-${safe}.png`, blob);
+      }
+      folder.file(
+        "flow.txt",
+        `${flow.name}\n\n${prompt}\n\n${outputs.map((o, i) => `${i + 1}. ${o.label}`).join("\n")}`,
+      );
+      const blob = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `scene changer - ${flow.name}.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success(`Exported ${outputs.length} output(s)`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setZipping(false);
+    }
+  };
+
   const download = (o: Output, i: number) => {
     const a = document.createElement("a");
     a.href = o.dataUrl;
@@ -301,8 +416,8 @@ export function FlowsPanel({ seedImage }: { seedImage?: string | null }) {
             onClick={() => select(f)}
             className={`w-full rounded-lg border p-3 text-left transition ${
               f.id === flowId
-                ? "border-emerald-400/60 bg-emerald-400/5"
-                : "border-neutral-800 bg-neutral-950/40 hover:border-neutral-700"
+                ? "border-emerald-400/50 bg-emerald-400/[0.07] shadow-[0_10px_30px_-18px_oklch(0.86_0.17_160/0.6)]"
+                : "border-white/[0.07] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04]"
             }`}
           >
             <div className="flex flex-wrap items-center gap-1.5">
@@ -322,7 +437,7 @@ export function FlowsPanel({ seedImage }: { seedImage?: string | null }) {
       </aside>
 
       <section className="space-y-4">
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 p-4">
+        <div className="panel-lux rounded-2xl p-4">
           <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-400">
             {flow.name} · inputs
           </div>
@@ -422,7 +537,7 @@ export function FlowsPanel({ seedImage }: { seedImage?: string | null }) {
             <button
               onClick={execute}
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-sm font-medium text-neutral-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+              className="btn-lux inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-none disabled:bg-neutral-800 disabled:text-neutral-500 disabled:shadow-none"
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               Run flow
@@ -433,12 +548,22 @@ export function FlowsPanel({ seedImage }: { seedImage?: string | null }) {
 
         {outputs.length > 0 && (
           <div>
-            <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-500">
-              Outputs
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-500">
+                Outputs ({outputs.length})
+              </div>
+              <button
+                onClick={downloadZip}
+                disabled={zipping}
+                className="btn-lux inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-none disabled:bg-neutral-800 disabled:text-neutral-500 disabled:shadow-none"
+              >
+                {zipping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Package className="h-3.5 w-3.5" />}
+                Export ZIP
+              </button>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {outputs.map((o, i) => (
-                <div key={o.id} className="overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950/60">
+                <div key={o.id} className="overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.02] shadow-[0_18px_40px_-28px_rgba(0,0,0,0.9)] transition hover:border-white/15">
                   <img src={o.dataUrl} alt={o.label} className="aspect-video w-full object-cover" />
                   <div className="flex items-center justify-between gap-2 p-2 text-[10px] text-neutral-400">
                     <span className="truncate" title={o.label}>

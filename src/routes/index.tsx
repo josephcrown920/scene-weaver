@@ -927,7 +927,7 @@ function Index() {
   const anyProcessing = items.some((i) => i.status === "processing" || i.status === "queued");
 
   return (
-    <div className="min-h-screen bg-[oklch(0.14_0.02_260)] text-neutral-100">
+    <div className="studio-aura min-h-screen text-neutral-100">
       <Toaster theme="dark" />
       <div
         className="pointer-events-none fixed inset-0 opacity-[0.06] mix-blend-overlay"
@@ -937,10 +937,14 @@ function Index() {
         }}
       />
 
-      <header className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-6">
+      <header className="sticky top-0 z-30 border-b border-white/5 bg-[oklch(0.14_0.02_260)]/70 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-4">
         <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.25em] text-neutral-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_12px_2px_oklch(0.86_0.17_160/0.6)]" />
           Scene Changer
+          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] tracking-[0.2em] text-neutral-500">
+            STUDIO
+          </span>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <FormatPicker value={format} onChange={setFormat} />
@@ -949,24 +953,25 @@ function Index() {
           <button
             onClick={downloadZip}
             disabled={doneCount === 0 || zipping}
-            className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-sm font-medium text-neutral-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+            className="btn-lux inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-none disabled:bg-neutral-800 disabled:text-neutral-500 disabled:shadow-none"
           >
             {zipping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
             scene changer.zip ({doneCount})
           </button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 pb-24">
-        <div className="mb-6 flex flex-wrap items-center gap-1 rounded-2xl border border-neutral-800 bg-neutral-950 p-1 text-xs w-fit">
+      <main className="mx-auto max-w-7xl px-6 pb-24 pt-6">
+        <div className="rail-lux mb-6 flex w-fit flex-wrap items-center gap-1 rounded-2xl p-1 text-xs">
           {RAIL.map((r) => (
             <button
               key={r.key}
               onClick={() => setView(r.key)}
               className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 transition ${
                 view === r.key
-                  ? "bg-emerald-400/10 text-emerald-300"
-                  : "text-neutral-500 hover:text-neutral-200"
+                  ? "rail-pill-active"
+                  : "text-neutral-500 hover:bg-white/5 hover:text-neutral-200"
               }`}
             >
               <r.icon className="h-3.5 w-3.5" />
