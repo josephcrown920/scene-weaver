@@ -233,6 +233,37 @@ export function TimelinePanel({
                       className="w-full accent-emerald-400"
                     />
                   </label>
+                  <label className="block">
+                    <div className="text-[10px] text-neutral-500">Camera move</div>
+                    <select
+                      value={c.motion ?? "push-in"}
+                      onChange={(e) => onPatch(c.id, { motion: e.target.value as MotionKey })}
+                      className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-neutral-200 outline-none [&>option]:bg-[oklch(0.18_0.03_278)]"
+                    >
+                      {MOTIONS.map((m) => (
+                        <option key={m.key} value={m.key}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <div className="flex items-center justify-between text-[10px] text-neutral-500">
+                      <span>Intensity</span>
+                      <span className="font-mono">
+                        {Math.round((c.motionStrength ?? 0.6) * 100)}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0.2}
+                      max={1}
+                      step={0.05}
+                      value={c.motionStrength ?? 0.6}
+                      onChange={(e) => onPatch(c.id, { motionStrength: Number(e.target.value) })}
+                      className="w-full accent-fuchsia-400"
+                    />
+                  </label>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1">
                       <button
