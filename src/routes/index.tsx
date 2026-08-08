@@ -41,7 +41,8 @@ import { CastPanel } from "@/components/scene/CastPanel";
 import { addCharacter, swapCharacter } from "@/lib/cast.functions";
 import { suggestGrade } from "@/lib/suggest-grade.functions";
 import { NEUTRAL_GRADE, PRESETS, presetByKey, drawGraded, type Grade } from "@/lib/grade";
-import type { AssetKind, CastMember, Clip, GalleryEntry, Shot } from "@/lib/studio-types";
+import type { AssetKind, CastMember, Clip, GalleryEntry, MotionKey, Shot } from "@/lib/studio-types";
+import { AgentStart } from "@/components/scene/AgentStart";
 import { Images, Palette, LayoutGrid, Film, Wand2, Users, Frame } from "lucide-react";
 
 
@@ -203,6 +204,9 @@ function Index() {
   const [customAngle, setCustomAngle] = useState("");
   const [showMap, setShowMap] = useState(true);
   const [view, setView] = useState<StudioView>("scenes");
+  const [agentPrompt, setAgentPrompt] = useState("");
+  const [agentMotion, setAgentMotion] = useState<MotionKey>("push-in");
+  const [agentStrength, setAgentStrength] = useState(0.6);
   const [shots, setShots] = useState<Shot[]>([]);
   const [clips, setClips] = useState<Clip[]>([]);
   const [boardExporting, setBoardExporting] = useState<string | null>(null);
@@ -799,7 +803,15 @@ function Index() {
   const addClip = (e: GalleryEntry) => {
     setClips((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), src: e.src, name: `${e.itemName} — ${e.label}`, duration: 2.5, grade: e.grade },
+      {
+        id: crypto.randomUUID(),
+        src: e.src,
+        name: `${e.itemName} — ${e.label}`,
+        duration: 2.5,
+        grade: e.grade,
+        motion: agentMotion,
+        motionStrength: agentStrength,
+      },
     ]);
     toast.success("Added to timeline");
   };
@@ -937,15 +949,17 @@ function Index() {
         }}
       />
 
-      <header className="sticky top-0 z-30 border-b border-white/5 bg-[oklch(0.14_0.02_260)]/70 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-4">
-        <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.25em] text-neutral-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_12px_2px_oklch(0.86_0.17_160/0.6)]" />
-          Scene Changer
-          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] tracking-[0.2em] text-neutral-500">
-            STUDIO
-          </span>
-        </div>
+      <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-[oklch(0.15_0.025_275)]/60 backdrop-blur-2xl">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-[linear-gradient(120deg,oklch(0.72_0.17_250),oklch(0.7_0.2_305)_50%,oklch(0.75_0.18_345))] shadow-[0_8px_22px_-10px_oklch(0.7_0.2_300/0.9)]">
+              <Sparkles className="h-3.5 w-3.5 text-white" />
+            </span>
+            <span className="text-sm font-medium tracking-tight text-white/90">Scene Changer</span>
+            <span className="ring-gradient rounded-full bg-white/5 px-2 py-0.5 text-[9px] tracking-[0.18em] text-white/45">
+              FLOW
+            </span>
+          </div>
         <div className="flex flex-wrap items-center gap-3">
           <FormatPicker value={format} onChange={setFormat} />
           <ResolutionPicker value={resolution} onChange={setResolution} />
@@ -953,7 +967,7 @@ function Index() {
           <button
             onClick={downloadZip}
             disabled={doneCount === 0 || zipping}
-            className="btn-lux inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-none disabled:bg-neutral-800 disabled:text-neutral-500 disabled:shadow-none"
+            className="btn-lux inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-none disabled:bg-white/5 disabled:text-white/30 disabled:shadow-none"
           >
             {zipping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
             scene changer.zip ({doneCount})
@@ -963,7 +977,8 @@ function Index() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 pb-24 pt-6">
-        <div className="rail-lux mb-6 flex w-fit flex-wrap items-center gap-1 rounded-2xl p-1 text-xs">
+        <div className="rail-lux mb-6 flex w-fit flex-wrap items-center gap-1 rounded-full p-1 text-xs">
+
           {RAIL.map((r) => (
             <button
               key={r.key}
@@ -1086,23 +1101,27 @@ function Index() {
         {view === "flows" && <FlowsPanel seedImage={active?.result ?? active?.original ?? null} />}
 
         {view === "scenes" && items.length === 0 && (
-          <>
-
-            <section className="mb-10 max-w-3xl">
-              <h1 className="font-serif text-5xl leading-[1.02] tracking-tight text-neutral-50 md:text-7xl">
-                Keep the scene.
-                <br />
-                <span className="italic text-neutral-400">Change the angle.</span>
-              </h1>
-              <p className="mt-6 max-w-xl text-sm leading-relaxed text-neutral-400 md:text-base">
-                Drop in a batch of frames. Walk the subject out, rebuild and
-                upscale the plate, then fire off multi-angle nodes. Chat with the
-                assistant, watch it in 3D, export as one ZIP.
-              </p>
-            </section>
-            <UploadZone onFiles={addFiles} inputRef={inputRef} />
-            <ComingSoonRow />
-          </>
+          <AgentStart
+            onFiles={(f) => addFiles(Array.from(f))}
+            inputRef={inputRef}
+            prompt={agentPrompt}
+            onPromptChange={setAgentPrompt}
+            onSubmit={() => {
+              if (!agentPrompt.trim()) {
+                inputRef.current?.click();
+                return;
+              }
+              toast.message("Drop your frames and the agent runs this brief", {
+                description: agentPrompt.trim(),
+              });
+              inputRef.current?.click();
+            }}
+            motion={agentMotion}
+            onMotionChange={setAgentMotion}
+            strength={agentStrength}
+            onStrengthChange={setAgentStrength}
+            busy={anyProcessing}
+          />
         )}
 
         {view === "scenes" && items.length > 0 && (

@@ -143,46 +143,92 @@
   }
 }
 
-/* ── Studio premium surfaces ─────────────────────────────── */
+/* ── Flow-grade gradient surfaces ─────────────────────────── */
 @utility panel-lux {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012)),
-    oklch(0.17 0.02 262 / 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015)),
+    oklch(0.19 0.03 278 / 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.25rem;
   box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
-    0 24px 60px -32px rgba(0, 0, 0, 0.9);
-  backdrop-filter: blur(18px) saturate(140%);
+    0 1px 0 0 rgba(255, 255, 255, 0.07) inset,
+    0 30px 70px -40px rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(24px) saturate(150%);
 }
 
 @utility rail-lux {
-  background: oklch(0.16 0.02 262 / 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: oklch(0.18 0.03 278 / 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
-    0 18px 40px -28px rgba(0, 0, 0, 0.9);
-  backdrop-filter: blur(20px) saturate(150%);
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 20px 50px -30px rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(26px) saturate(160%);
 }
 
 @utility rail-pill-active {
-  background: linear-gradient(180deg, oklch(0.86 0.17 160 / 0.18), oklch(0.86 0.17 160 / 0.06));
-  color: oklch(0.9 0.15 160);
+  background: linear-gradient(135deg, oklch(0.68 0.19 268 / 0.55), oklch(0.72 0.19 330 / 0.4));
+  color: oklch(0.98 0.01 280);
   box-shadow:
-    0 0 0 1px oklch(0.86 0.17 160 / 0.3) inset,
-    0 6px 18px -10px oklch(0.86 0.17 160 / 0.5);
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset,
+    0 10px 26px -12px oklch(0.68 0.19 280 / 0.75);
 }
 
 @utility btn-lux {
-  background: linear-gradient(180deg, oklch(0.9 0.16 160), oklch(0.78 0.16 162));
-  color: oklch(0.16 0.02 262);
+  background: linear-gradient(120deg, oklch(0.72 0.17 250), oklch(0.7 0.2 300) 48%, oklch(0.75 0.18 345));
+  color: oklch(0.99 0.005 280);
   box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.45) inset,
-    0 10px 26px -12px oklch(0.86 0.17 160 / 0.65);
+    0 1px 0 0 rgba(255, 255, 255, 0.3) inset,
+    0 14px 34px -14px oklch(0.7 0.2 300 / 0.8);
 }
 
 @utility studio-aura {
   background:
-    radial-gradient(900px 520px at 12% -10%, oklch(0.62 0.2 274 / 0.16), transparent 70%),
-    radial-gradient(760px 460px at 96% 0%, oklch(0.86 0.17 160 / 0.1), transparent 68%),
-    oklch(0.14 0.02 260);
+    radial-gradient(1100px 620px at 8% -12%, oklch(0.62 0.22 268 / 0.35), transparent 66%),
+    radial-gradient(900px 560px at 96% -6%, oklch(0.7 0.21 340 / 0.26), transparent 64%),
+    radial-gradient(1000px 700px at 50% 108%, oklch(0.66 0.19 205 / 0.22), transparent 68%),
+    oklch(0.135 0.022 275);
 }
+
+@utility text-gradient {
+  background: linear-gradient(100deg, oklch(0.95 0.03 260), oklch(0.8 0.16 290) 45%, oklch(0.82 0.16 345));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility ring-gradient {
+  position: relative;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(120deg, oklch(0.72 0.17 250 / 0.9), oklch(0.7 0.2 305 / 0.7), oklch(0.75 0.18 345 / 0.9));
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+@utility aurora-drift {
+  animation: aurora-drift 18s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(-2%, -1%, 0) scale(1.05);
+    opacity: 0.75;
+  }
+  100% {
+    transform: translate3d(3%, 2%, 0) scale(1.15);
+    opacity: 1;
+  }
+}
+

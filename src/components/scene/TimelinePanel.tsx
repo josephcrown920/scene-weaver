@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Film, Loader2, Pause, Play, Plus, Trash2, ArrowLeft, ArrowRight } from "lucide-react";
 import { GradedImage } from "@/components/scene/GradedImage";
 import { drawGraded } from "@/lib/grade";
-import type { Clip } from "@/lib/studio-types";
+import { MOTIONS, motionTransform, type Clip, type MotionKey } from "@/lib/studio-types";
 
 async function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
@@ -106,16 +106,23 @@ export function TimelinePanel({
         const frames = Math.max(1, Math.round(clip.duration * FPS));
         for (let f = 0; f < frames; f++) {
           const p = f / frames;
-          const zoom = 1.04 + p * 0.08; // slow push-in
+          const { zoom, dx, dy, rot } = motionTransform(
+            clip.motion ?? "push-in",
+            clip.motionStrength ?? 0.6,
+            p,
+          );
           const scale = Math.max(W / img.width, H / img.height) * zoom;
           const dw = img.width * scale;
           const dh = img.height * scale;
           ctx.fillStyle = "#000";
           ctx.fillRect(0, 0, W, H);
           ctx.save();
-          ctx.translate((W - dw) / 2, (H - dh) / 2);
+          ctx.translate(W / 2, H / 2);
+          if (rot) ctx.rotate((rot * Math.PI) / 180);
+          ctx.translate(-dw / 2 + dx * W, -dh / 2 + dy * H);
           drawGraded(ctx, img, dw, dh, clip.grade);
           ctx.restore();
+
 
           // cross-fade the first 12 frames from black
           const fade = Math.min(1, f / 10);
@@ -224,6 +231,37 @@ export function TimelinePanel({
                       value={c.duration}
                       onChange={(e) => onPatch(c.id, { duration: Number(e.target.value) })}
                       className="w-full accent-emerald-400"
+                    />
+                  </label>
+                  <label className="block">
+                    <div className="text-[10px] text-neutral-500">Camera move</div>
+                    <select
+                      value={c.motion ?? "push-in"}
+                      onChange={(e) => onPatch(c.id, { motion: e.target.value as MotionKey })}
+                      className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-neutral-200 outline-none [&>option]:bg-[oklch(0.18_0.03_278)]"
+                    >
+                      {MOTIONS.map((m) => (
+                        <option key={m.key} value={m.key}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <div className="flex items-center justify-between text-[10px] text-neutral-500">
+                      <span>Intensity</span>
+                      <span className="font-mono">
+                        {Math.round((c.motionStrength ?? 0.6) * 100)}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0.2}
+                      max={1}
+                      step={0.05}
+                      value={c.motionStrength ?? 0.6}
+                      onChange={(e) => onPatch(c.id, { motionStrength: Number(e.target.value) })}
+                      className="w-full accent-fuchsia-400"
                     />
                   </label>
                   <div className="flex items-center justify-between">
