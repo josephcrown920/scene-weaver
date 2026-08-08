@@ -106,16 +106,23 @@ export function TimelinePanel({
         const frames = Math.max(1, Math.round(clip.duration * FPS));
         for (let f = 0; f < frames; f++) {
           const p = f / frames;
-          const zoom = 1.04 + p * 0.08; // slow push-in
+          const { zoom, dx, dy, rot } = motionTransform(
+            clip.motion ?? "push-in",
+            clip.motionStrength ?? 0.6,
+            p,
+          );
           const scale = Math.max(W / img.width, H / img.height) * zoom;
           const dw = img.width * scale;
           const dh = img.height * scale;
           ctx.fillStyle = "#000";
           ctx.fillRect(0, 0, W, H);
           ctx.save();
-          ctx.translate((W - dw) / 2, (H - dh) / 2);
+          ctx.translate(W / 2, H / 2);
+          if (rot) ctx.rotate((rot * Math.PI) / 180);
+          ctx.translate(-dw / 2 + dx * W, -dh / 2 + dy * H);
           drawGraded(ctx, img, dw, dh, clip.grade);
           ctx.restore();
+
 
           // cross-fade the first 12 frames from black
           const fade = Math.min(1, f / 10);
