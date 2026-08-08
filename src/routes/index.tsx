@@ -1101,23 +1101,27 @@ function Index() {
         {view === "flows" && <FlowsPanel seedImage={active?.result ?? active?.original ?? null} />}
 
         {view === "scenes" && items.length === 0 && (
-          <>
-
-            <section className="mb-10 max-w-3xl">
-              <h1 className="font-serif text-5xl leading-[1.02] tracking-tight text-neutral-50 md:text-7xl">
-                Keep the scene.
-                <br />
-                <span className="italic text-neutral-400">Change the angle.</span>
-              </h1>
-              <p className="mt-6 max-w-xl text-sm leading-relaxed text-neutral-400 md:text-base">
-                Drop in a batch of frames. Walk the subject out, rebuild and
-                upscale the plate, then fire off multi-angle nodes. Chat with the
-                assistant, watch it in 3D, export as one ZIP.
-              </p>
-            </section>
-            <UploadZone onFiles={addFiles} inputRef={inputRef} />
-            <ComingSoonRow />
-          </>
+          <AgentStart
+            onFiles={(f) => addFiles(Array.from(f))}
+            inputRef={inputRef}
+            prompt={agentPrompt}
+            onPromptChange={setAgentPrompt}
+            onSubmit={() => {
+              if (!agentPrompt.trim()) {
+                inputRef.current?.click();
+                return;
+              }
+              toast.message("Drop your frames and the agent runs this brief", {
+                description: agentPrompt.trim(),
+              });
+              inputRef.current?.click();
+            }}
+            motion={agentMotion}
+            onMotionChange={setAgentMotion}
+            strength={agentStrength}
+            onStrengthChange={setAgentStrength}
+            busy={anyProcessing}
+          />
         )}
 
         {view === "scenes" && items.length > 0 && (
