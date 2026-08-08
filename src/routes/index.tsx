@@ -203,6 +203,9 @@ function Index() {
   const [customAngle, setCustomAngle] = useState("");
   const [showMap, setShowMap] = useState(true);
   const [view, setView] = useState<StudioView>("scenes");
+  const [agentPrompt, setAgentPrompt] = useState("");
+  const [agentMotion, setAgentMotion] = useState<MotionKey>("push-in");
+  const [agentStrength, setAgentStrength] = useState(0.6);
   const [shots, setShots] = useState<Shot[]>([]);
   const [clips, setClips] = useState<Clip[]>([]);
   const [boardExporting, setBoardExporting] = useState<string | null>(null);
