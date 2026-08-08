@@ -799,7 +799,15 @@ function Index() {
   const addClip = (e: GalleryEntry) => {
     setClips((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), src: e.src, name: `${e.itemName} — ${e.label}`, duration: 2.5, grade: e.grade },
+      {
+        id: crypto.randomUUID(),
+        src: e.src,
+        name: `${e.itemName} — ${e.label}`,
+        duration: 2.5,
+        grade: e.grade,
+        motion: agentMotion,
+        motionStrength: agentStrength,
+      },
     ]);
     toast.success("Added to timeline");
   };
