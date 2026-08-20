@@ -250,6 +250,20 @@ export function TimelinePanel({
                     />
                   </label>
                   <label className="block">
+                    <div className="text-[10px] text-neutral-500">Beat</div>
+                    <select
+                      value={c.group ?? "Scene"}
+                      onChange={(e) => onPatch(c.id, { group: e.target.value })}
+                      className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-neutral-200 outline-none [&>option]:bg-[oklch(0.18_0.03_278)]"
+                    >
+                      {SCENE_GROUPS.map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
                     <div className="text-[10px] text-neutral-500">Camera move</div>
                     <select
                       value={c.motion ?? "push-in"}
