@@ -194,6 +194,16 @@ export function StoryboardPanel({
                   <option key={t}>{t}</option>
                 ))}
               </select>
+              <select
+                value={s.group ?? "Scene"}
+                onChange={(e) => onPatch(s.id, { group: e.target.value })}
+                className="w-full rounded border border-neutral-800 bg-neutral-950 px-2 py-1 text-[11px] text-neutral-400 outline-none"
+                aria-label="Scene group"
+              >
+                {SCENE_GROUPS.map((g) => (
+                  <option key={g}>{g}</option>
+                ))}
+              </select>
               <textarea
                 value={s.caption}
                 onChange={(e) => onPatch(s.id, { caption: e.target.value })}
