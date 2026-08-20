@@ -43,7 +43,8 @@ import { suggestGrade } from "@/lib/suggest-grade.functions";
 import { NEUTRAL_GRADE, PRESETS, presetByKey, drawGraded, type Grade } from "@/lib/grade";
 import type { AssetKind, CastMember, Clip, GalleryEntry, MotionKey, Shot } from "@/lib/studio-types";
 import { AgentStart } from "@/components/scene/AgentStart";
-import { Images, Palette, LayoutGrid, Film, Wand2, Users, Frame } from "lucide-react";
+import { VariationLinePanel } from "@/components/scene/VariationLinePanel";
+import { Images, Palette, LayoutGrid, Film, Wand2, Users, Frame, Repeat } from "lucide-react";
 
 
 export const Route = createFileRoute("/")({
