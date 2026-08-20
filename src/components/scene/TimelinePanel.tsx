@@ -36,6 +36,13 @@ export function TimelinePanel({
   const rafRef = useRef<number | null>(null);
 
   const total = clips.reduce((a, c) => a + c.duration, 0);
+  const groupTotals: [string, number][] = Array.from(
+    clips.reduce((m, c) => {
+      const g = c.group ?? "Scene";
+      m.set(g, (m.get(g) ?? 0) + c.duration);
+      return m;
+    }, new Map<string, number>()),
+  );
 
   useEffect(() => {
     if (!playing) return;
