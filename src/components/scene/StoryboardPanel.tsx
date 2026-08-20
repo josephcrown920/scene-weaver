@@ -1,7 +1,19 @@
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, CheckSquare, Download, Loader2, Square, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckSquare,
+  Download,
+  Loader2,
+  Megaphone,
+  Square,
+  Trash2,
+} from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { GradedImage } from "@/components/scene/GradedImage";
-import { SHOT_TYPES, type Shot } from "@/lib/studio-types";
+import { directBoard } from "@/lib/direct-board.functions";
+import { SCENE_GROUPS, SHOT_TYPES, type Shot } from "@/lib/studio-types";
 
 export function StoryboardPanel({
   shots,
@@ -13,6 +25,7 @@ export function StoryboardPanel({
   onExport,
   onExportZip,
   exporting,
+  onApplyDrafts,
 }: {
   shots: Shot[];
   onPatch: (id: string, patch: Partial<Shot>) => void;
@@ -23,20 +36,84 @@ export function StoryboardPanel({
   onExport: (title: string) => void;
   onExportZip: (title: string) => void;
   exporting: string | null;
+  onApplyDrafts: (drafts: { caption: string; shotType: string; group: string }[]) => void;
 }) {
   const [title, setTitle] = useState("Scene Changer — Storyboard");
+  const [treatment, setTreatment] = useState("");
+  const [beats, setBeats] = useState(10);
+  const [directing, setDirecting] = useState(false);
+  const direct = useServerFn(directBoard);
   const selected = shots.filter((s) => s.selected);
+
+  const runDirector = async () => {
+    if (treatment.trim().length < 10) return;
+    setDirecting(true);
+    try {
+      const res = await direct({
+        data: { treatment: treatment.trim(), count: beats, shotTypes: SHOT_TYPES },
+      });
+      onApplyDrafts(res.shots);
+      toast.success(`Director drafted ${res.shots.length} shots`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Director failed");
+    } finally {
+      setDirecting(false);
+    }
+  };
+
+  const director = (
+    <div className="panel-lux space-y-2 rounded-2xl p-3">
+      <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-400">
+        <Megaphone className="h-3 w-3" /> Director — paste a treatment or lyrics
+      </div>
+      <textarea
+        value={treatment}
+        onChange={(e) => setTreatment(e.target.value)}
+        rows={3}
+        placeholder="Paste the treatment, lyrics or brief and the director will break it into ordered shots with beats."
+        className="w-full resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-neutral-100 outline-none placeholder:text-neutral-600"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-[11px] text-neutral-400">
+          Shots
+          <input
+            type="number"
+            min={2}
+            max={24}
+            value={beats}
+            onChange={(e) => setBeats(Math.max(2, Math.min(24, Number(e.target.value))))}
+            className="w-16 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-neutral-100 outline-none"
+          />
+        </label>
+        <button
+          onClick={runDirector}
+          disabled={directing || treatment.trim().length < 10}
+          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-neutral-200 hover:border-white/25 disabled:opacity-40"
+        >
+          {directing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Megaphone className="h-3 w-3" />}
+          Draft board
+        </button>
+        <span className="text-[10px] text-neutral-600">
+          Frames are pulled from your gallery in order — regenerate any shot from Create.
+        </span>
+      </div>
+    </div>
+  );
 
   if (shots.length === 0) {
     return (
-      <div className="flex h-[60vh] items-center justify-center rounded-2xl border border-dashed border-neutral-800 text-center text-sm text-neutral-500">
-        Nothing on the board. Send shots here from the Gallery.
+      <div className="space-y-4">
+        {director}
+        <div className="flex h-[40vh] items-center justify-center rounded-2xl border border-dashed border-neutral-800 text-center text-sm text-neutral-500">
+          Nothing on the board. Send shots here from the Gallery, or draft one above.
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {director}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-800 bg-neutral-950/60 p-3">
         <input
           value={title}
