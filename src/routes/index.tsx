@@ -43,7 +43,8 @@ import { suggestGrade } from "@/lib/suggest-grade.functions";
 import { NEUTRAL_GRADE, PRESETS, presetByKey, drawGraded, type Grade } from "@/lib/grade";
 import type { AssetKind, CastMember, Clip, GalleryEntry, MotionKey, Shot } from "@/lib/studio-types";
 import { AgentStart } from "@/components/scene/AgentStart";
-import { Images, Palette, LayoutGrid, Film, Wand2, Users, Frame } from "lucide-react";
+import { VariationLinePanel } from "@/components/scene/VariationLinePanel";
+import { Images, Palette, LayoutGrid, Film, Wand2, Users, Frame, Repeat } from "lucide-react";
 
 
 export const Route = createFileRoute("/")({
@@ -93,12 +94,22 @@ interface Item {
   grading?: boolean;
 }
 
-type StudioView = "scenes" | "canvas" | "gallery" | "color" | "board" | "timeline" | "cast" | "flows";
+type StudioView =
+  | "scenes"
+  | "canvas"
+  | "gallery"
+  | "line"
+  | "color"
+  | "board"
+  | "timeline"
+  | "cast"
+  | "flows";
 
 const RAIL: { key: StudioView; label: string; icon: typeof Images }[] = [
   { key: "scenes", label: "Create", icon: Sparkles },
   { key: "canvas", label: "Canvas", icon: Frame },
   { key: "gallery", label: "Gallery", icon: Images },
+  { key: "line", label: "Line", icon: Repeat },
   { key: "color", label: "Color", icon: Palette },
   { key: "board", label: "Board", icon: LayoutGrid },
   { key: "timeline", label: "Timeline", icon: Film },
@@ -783,6 +794,60 @@ export function SceneWeaverStudio() {
     );
     return out;
   });
+
+  /** Publish a finished variation line into the gallery as its own scene. */
+  const publishVariations = (results: { label: string; src: string }[]) => {
+    if (results.length === 0) return;
+    const id = crypto.randomUUID();
+    setItems((prev) => [
+      ...prev,
+      {
+        id,
+        name: `Variation line ${prev.length + 1}`,
+        original: results[0].src,
+        result: null,
+        prevResult: null,
+        status: "done" as Status,
+        chat: [],
+        chatBusy: false,
+        refining: false,
+        upscaling: false,
+        rebuilding: false,
+        variants: results.map((r) => ({
+          id: crypto.randomUUID(),
+          label: r.label,
+          dataUrl: r.src,
+          kind: "variation" as AssetKind,
+        })),
+        angleBusy: false,
+        nodes: [],
+        grade: { ...NEUTRAL_GRADE },
+        gradePreset: "neutral",
+      },
+    ]);
+    toast.success(`${results.length} variation(s) sent to Gallery`);
+  };
+
+  /** Apply a director-drafted shot list, reusing gallery frames in order. */
+  const applyDrafts = (drafts: { caption: string; shotType: string; group: string }[]) => {
+    const frames = gallery.filter((e) => e.kind !== "source");
+    const pool = frames.length > 0 ? frames : gallery;
+    setShots(
+      drafts.map((d, i) => {
+        const frame = pool[i % Math.max(1, pool.length)];
+        return {
+          id: crypto.randomUUID(),
+          src: frame?.src ?? "",
+          name: frame ? `${frame.itemName} — ${frame.label}` : `Shot ${i + 1}`,
+          caption: d.caption,
+          shotType: d.shotType,
+          group: d.group,
+          selected: true,
+          grade: frame?.grade ?? { ...NEUTRAL_GRADE },
+        };
+      }),
+    );
+  };
 
   const addShot = (e: GalleryEntry) => {
     setShots((prev) => [

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Film, Loader2, Pause, Play, Plus, Trash2, ArrowLeft, ArrowRight } from "lucide-react";
 import { GradedImage } from "@/components/scene/GradedImage";
 import { drawGraded } from "@/lib/grade";
-import { MOTIONS, motionTransform, type Clip, type MotionKey } from "@/lib/studio-types";
+import { MOTIONS, SCENE_GROUPS, motionTransform, type Clip, type MotionKey } from "@/lib/studio-types";
 
 async function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
@@ -36,6 +36,13 @@ export function TimelinePanel({
   const rafRef = useRef<number | null>(null);
 
   const total = clips.reduce((a, c) => a + c.duration, 0);
+  const groupTotals: [string, number][] = Array.from(
+    clips.reduce((m, c) => {
+      const g = c.group ?? "Scene";
+      m.set(g, (m.get(g) ?? 0) + c.duration);
+      return m;
+    }, new Map<string, number>()),
+  );
 
   useEffect(() => {
     if (!playing) return;
@@ -151,8 +158,17 @@ export function TimelinePanel({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-800 bg-neutral-950/60 p-3">
-        <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-400">
-          <Film className="h-3 w-3" /> Sequence · {clips.length} clip(s) · {total.toFixed(1)}s
+        <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-400">
+          <Film className="h-3 w-3" /> Sequence · {clips.length} clip(s) ·{" "}
+          {Math.floor(total / 60)}:{String(Math.round(total % 60)).padStart(2, "0")} runtime
+          {groupTotals.map(([g, secs]) => (
+            <span
+              key={g}
+              className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] text-neutral-400"
+            >
+              {g} {secs.toFixed(1)}s
+            </span>
+          ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -232,6 +248,20 @@ export function TimelinePanel({
                       onChange={(e) => onPatch(c.id, { duration: Number(e.target.value) })}
                       className="w-full accent-emerald-400"
                     />
+                  </label>
+                  <label className="block">
+                    <div className="text-[10px] text-neutral-500">Beat</div>
+                    <select
+                      value={c.group ?? "Scene"}
+                      onChange={(e) => onPatch(c.id, { group: e.target.value })}
+                      className="mt-1 w-full rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-neutral-200 outline-none [&>option]:bg-[oklch(0.18_0.03_278)]"
+                    >
+                      {SCENE_GROUPS.map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="block">
                     <div className="text-[10px] text-neutral-500">Camera move</div>

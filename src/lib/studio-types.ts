@@ -1,6 +1,6 @@
 import type { Grade } from "@/lib/grade";
 
-export type AssetKind = "source" | "plate" | "angle" | "cast" | "swap";
+export type AssetKind = "source" | "plate" | "angle" | "cast" | "swap" | "variation";
 
 export interface CastMember {
   id: string;
@@ -27,7 +27,10 @@ export interface Shot {
   shotType: string;
   selected: boolean;
   grade: Grade;
+  group?: string;
 }
+
+export const SCENE_GROUPS = ["Intro", "Verse", "Chorus", "Bridge", "Outro", "Scene"];
 
 export type MotionKey =
   | "static"
@@ -115,6 +118,7 @@ export interface Clip {
   grade: Grade;
   motion?: MotionKey;
   motionStrength?: number; // 0..1
+  group?: string;
 }
 
 export const SHOT_TYPES = [
