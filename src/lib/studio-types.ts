@@ -27,7 +27,10 @@ export interface Shot {
   shotType: string;
   selected: boolean;
   grade: Grade;
+  group?: string;
 }
+
+export const SCENE_GROUPS = ["Intro", "Verse", "Chorus", "Bridge", "Outro", "Scene"];
 
 export type MotionKey =
   | "static"
