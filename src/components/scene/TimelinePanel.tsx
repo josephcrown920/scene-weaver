@@ -151,8 +151,17 @@ export function TimelinePanel({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-800 bg-neutral-950/60 p-3">
-        <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-400">
-          <Film className="h-3 w-3" /> Sequence · {clips.length} clip(s) · {total.toFixed(1)}s
+        <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-400">
+          <Film className="h-3 w-3" /> Sequence · {clips.length} clip(s) ·{" "}
+          {Math.floor(total / 60)}:{String(Math.round(total % 60)).padStart(2, "0")} runtime
+          {groupTotals.map(([g, secs]) => (
+            <span
+              key={g}
+              className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] text-neutral-400"
+            >
+              {g} {secs.toFixed(1)}s
+            </span>
+          ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
