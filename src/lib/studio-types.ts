@@ -118,6 +118,7 @@ export interface Clip {
   grade: Grade;
   motion?: MotionKey;
   motionStrength?: number; // 0..1
+  group?: string;
 }
 
 export const SHOT_TYPES = [
