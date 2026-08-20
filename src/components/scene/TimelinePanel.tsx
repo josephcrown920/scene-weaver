@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Film, Loader2, Pause, Play, Plus, Trash2, ArrowLeft, ArrowRight } from "lucide-react";
 import { GradedImage } from "@/components/scene/GradedImage";
 import { drawGraded } from "@/lib/grade";
-import { MOTIONS, motionTransform, type Clip, type MotionKey } from "@/lib/studio-types";
+import { MOTIONS, SCENE_GROUPS, motionTransform, type Clip, type MotionKey } from "@/lib/studio-types";
 
 async function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
