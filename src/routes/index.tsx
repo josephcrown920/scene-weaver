@@ -94,12 +94,22 @@ interface Item {
   grading?: boolean;
 }
 
-type StudioView = "scenes" | "canvas" | "gallery" | "color" | "board" | "timeline" | "cast" | "flows";
+type StudioView =
+  | "scenes"
+  | "canvas"
+  | "gallery"
+  | "line"
+  | "color"
+  | "board"
+  | "timeline"
+  | "cast"
+  | "flows";
 
 const RAIL: { key: StudioView; label: string; icon: typeof Images }[] = [
   { key: "scenes", label: "Create", icon: Sparkles },
   { key: "canvas", label: "Canvas", icon: Frame },
   { key: "gallery", label: "Gallery", icon: Images },
+  { key: "line", label: "Line", icon: Repeat },
   { key: "color", label: "Color", icon: Palette },
   { key: "board", label: "Board", icon: LayoutGrid },
   { key: "timeline", label: "Timeline", icon: Film },
