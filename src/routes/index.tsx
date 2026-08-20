@@ -65,7 +65,7 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: Index,
+  component: SceneWeaverStudio,
 });
 
 type Status = "queued" | "processing" | "done" | "error";
@@ -184,7 +184,7 @@ function safeName(s: string): string {
   return (s || "scene").replace(/[^\w.-]+/g, "_").slice(0, 80) || "scene";
 }
 
-function Index() {
+export function SceneWeaverStudio() {
   const run = useServerFn(extractScene);
   const runAngle = useServerFn(generateAngle);
   const runUpscale = useServerFn(upscaleScene);
