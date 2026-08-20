@@ -795,6 +795,60 @@ export function SceneWeaverStudio() {
     return out;
   });
 
+  /** Publish a finished variation line into the gallery as its own scene. */
+  const publishVariations = (results: { label: string; src: string }[]) => {
+    if (results.length === 0) return;
+    const id = crypto.randomUUID();
+    setItems((prev) => [
+      ...prev,
+      {
+        id,
+        name: `Variation line ${prev.length + 1}`,
+        original: results[0].src,
+        result: null,
+        prevResult: null,
+        status: "done" as Status,
+        chat: [],
+        chatBusy: false,
+        refining: false,
+        upscaling: false,
+        rebuilding: false,
+        variants: results.map((r) => ({
+          id: crypto.randomUUID(),
+          label: r.label,
+          dataUrl: r.src,
+          kind: "variation" as AssetKind,
+        })),
+        angleBusy: false,
+        nodes: [],
+        grade: { ...NEUTRAL_GRADE },
+        gradePreset: "neutral",
+      },
+    ]);
+    toast.success(`${results.length} variation(s) sent to Gallery`);
+  };
+
+  /** Apply a director-drafted shot list, reusing gallery frames in order. */
+  const applyDrafts = (drafts: { caption: string; shotType: string; group: string }[]) => {
+    const frames = gallery.filter((e) => e.kind !== "source");
+    const pool = frames.length > 0 ? frames : gallery;
+    setShots(
+      drafts.map((d, i) => {
+        const frame = pool[i % Math.max(1, pool.length)];
+        return {
+          id: crypto.randomUUID(),
+          src: frame?.src ?? "",
+          name: frame ? `${frame.itemName} — ${frame.label}` : `Shot ${i + 1}`,
+          caption: d.caption,
+          shotType: d.shotType,
+          group: d.group,
+          selected: true,
+          grade: frame?.grade ?? { ...NEUTRAL_GRADE },
+        };
+      }),
+    );
+  };
+
   const addShot = (e: GalleryEntry) => {
     setShots((prev) => [
       ...prev,
