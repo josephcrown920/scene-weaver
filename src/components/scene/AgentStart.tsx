@@ -199,10 +199,44 @@ export function AgentStart({
         ))}
       </div>
 
-      <div className="mt-6 flex items-center justify-center gap-2 text-[11px] text-white/35">
+      <section className="mt-16">
+        <div className="text-center">
+          <h2 className="text-2xl font-medium tracking-tight text-white/90 md:text-3xl">
+            What Scene Weaver does
+          </h2>
+          <p className="mx-auto mt-3 max-w-lg text-sm text-white/45">
+            Four moves, one workspace — everything lands on the canvas.
+          </p>
+        </div>
+
+        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          {SHOWCASE.map((s) => (
+            <figure
+              key={s.title}
+              className="panel-lux group overflow-hidden rounded-2xl p-0 transition hover:brightness-110"
+            >
+              <img
+                src={s.src}
+                alt={s.title}
+                loading="lazy"
+                width={1024}
+                height={640}
+                className="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+              />
+              <figcaption className="p-4">
+                <div className="text-sm font-medium text-white/90">{s.title}</div>
+                <p className="mt-1 text-xs leading-relaxed text-white/45">{s.body}</p>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      </section>
+
+      <div className="mt-10 flex items-center justify-center gap-2 text-[11px] text-white/35">
         <Clapperboard className="h-3.5 w-3.5" />
-        Motion renders straight to the timeline as a video export.
+        Every generation lands on the infinite canvas.
       </div>
+
 
       <input
         ref={inputRef}
