@@ -11,6 +11,33 @@ import {
   Wand2,
 } from "lucide-react";
 import { MOTIONS, type MotionKey } from "@/lib/studio-types";
+import showcasePlate from "@/assets/showcase-plate.jpg";
+import showcaseAngle from "@/assets/showcase-angle.jpg";
+import showcaseGrid from "@/assets/showcase-grid.jpg";
+import showcaseFlow from "@/assets/showcase-flow.jpg";
+
+const SHOWCASE = [
+  {
+    src: showcasePlate,
+    title: "Clean the plate",
+    body: "Lift the person out and keep the street, the car and the light exactly as shot.",
+  },
+  {
+    src: showcaseAngle,
+    title: "New camera angles",
+    body: "Re-shoot the same scene from a reverse, low or orbiting view — same world, new lens.",
+  },
+  {
+    src: showcaseGrid,
+    title: "Batch a whole set",
+    body: "Run one brief across every frame and get a full contact sheet of usable stills.",
+  },
+  {
+    src: showcaseFlow,
+    title: "Chain it in Flows",
+    body: "Style transfer, multi-character scenes and campaign sets as connected recipes.",
+  },
+];
 
 const IDEAS = [
   "Walk the person out and keep the street empty",
