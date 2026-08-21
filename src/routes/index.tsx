@@ -94,26 +94,11 @@ interface Item {
   grading?: boolean;
 }
 
-type StudioView =
-  | "scenes"
-  | "canvas"
-  | "gallery"
-  | "line"
-  | "color"
-  | "board"
-  | "timeline"
-  | "cast"
-  | "flows";
+type StudioView = "scenes" | "canvas" | "flows";
 
-const RAIL: { key: StudioView; label: string; icon: typeof Images }[] = [
+const RAIL: { key: StudioView; label: string; icon: typeof Frame }[] = [
   { key: "scenes", label: "Create", icon: Sparkles },
   { key: "canvas", label: "Canvas", icon: Frame },
-  { key: "gallery", label: "Gallery", icon: Images },
-  { key: "line", label: "Line", icon: Repeat },
-  { key: "color", label: "Color", icon: Palette },
-  { key: "board", label: "Board", icon: LayoutGrid },
-  { key: "timeline", label: "Timeline", icon: Film },
-  { key: "cast", label: "Cast", icon: Users },
   { key: "flows", label: "Flows", icon: Wand2 },
 ];
 
@@ -376,7 +361,7 @@ export function SceneWeaverStudio() {
       })),
     ];
     setClips((prev) => [...prev, ...seq]);
-    setView("timeline");
+    setView("canvas");
     toast.success(`${seq.length} clips arranged on the timeline`);
   };
 
@@ -1073,96 +1058,6 @@ export function SceneWeaverStudio() {
           />
         )}
 
-        {view === "gallery" && (
-          <GalleryPanel
-            entries={gallery}
-            onDownload={(e) => downloadOne(e.src, `${e.itemName}-${e.label}`, e.grade)}
-            onSendToBoard={addShot}
-            onSendToTimeline={addClip}
-            onOpenScene={(id) => {
-              setActiveId(id);
-              setView("scenes");
-            }}
-          />
-        )}
-
-        {view === "color" && (
-          <ColorPanel
-            scenes={items
-              .filter((i) => i.result || i.original)
-              .map((i) => ({
-                id: i.id,
-                name: i.name,
-                src: i.result ?? i.original,
-                grade: i.grade,
-                gradeNote: i.gradeNote,
-                gradePreset: i.gradePreset,
-                grading: i.grading,
-              }))}
-            activeId={activeId}
-            onSelect={setActiveId}
-            onGrade={setGrade}
-            onAutoGrade={autoGrade}
-            onAutoGradeAll={autoGradeAll}
-            autoAllBusy={autoAllBusy}
-          />
-        )}
-
-        {view === "board" && (
-          <StoryboardPanel
-            shots={shots}
-            onPatch={(id, p) => setShots((prev) => prev.map((s) => (s.id === id ? { ...s, ...p } : s)))}
-            onRemove={(id) => setShots((prev) => prev.filter((s) => s.id !== id))}
-            onMove={(id, dir) => setShots((prev) => move(prev, id, dir))}
-            onToggle={(id) =>
-              setShots((prev) => prev.map((s) => (s.id === id ? { ...s, selected: !s.selected } : s)))
-            }
-            onToggleAll={(sel) => setShots((prev) => prev.map((s) => ({ ...s, selected: sel })))}
-            onExport={exportContactSheet}
-            onExportZip={exportBoardZip}
-            exporting={boardExporting}
-          />
-        )}
-
-        {view === "timeline" && (
-          <TimelinePanel
-            clips={clips}
-            onPatch={(id, p) => setClips((prev) => prev.map((c) => (c.id === id ? { ...c, ...p } : c)))}
-            onRemove={(id) => setClips((prev) => prev.filter((c) => c.id !== id))}
-            onMove={(id, dir) => setClips((prev) => move(prev, id, dir))}
-            onAddAll={addAllPlates}
-            canAddAll={items.some((i) => i.result)}
-          />
-        )}
-
-        {view === "cast" && (
-          <div className="space-y-4">
-            {active ? (
-              <>
-                <div className="overflow-hidden rounded-2xl border border-neutral-800">
-                  <img
-                    src={active.result ?? active.original}
-                    alt={active.name}
-                    className="max-h-[320px] w-full object-cover"
-                  />
-                </div>
-                <CastPanel
-                  cast={cast}
-                  busy={castBusy}
-                  onAdd={(m) => setCast((p) => [...p, { ...m, id: crypto.randomUUID() }])}
-                  onRemove={(cid) => setCast((p) => p.filter((c) => c.id !== cid))}
-                  onInsert={(m, placement) => castInsert(active.id, m, placement)}
-                  onSwap={(m, target) => castSwap(active.id, m, target)}
-                />
-              </>
-            ) : (
-              <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-                Upload or select a scene first
-              </p>
-            )}
-          </div>
-        )}
-
         {view === "flows" && <FlowsPanel seedImage={active?.result ?? active?.original ?? null} />}
 
         {view === "scenes" && items.length === 0 && (
@@ -1376,7 +1271,7 @@ export function SceneWeaverStudio() {
                               onClick={() => anglesToTimeline(active.id)}
                               className="inline-flex items-center gap-1.5 rounded-full bg-violet-500 px-3 py-1 text-[11px] font-medium text-neutral-50 transition hover:bg-violet-400"
                             >
-                              <Film className="h-3.5 w-3.5" /> Arrange into video
+                              <Frame className="h-3.5 w-3.5" /> Arrange on canvas
                             </button>
                           </div>
                           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
